@@ -7,8 +7,11 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
 
 ## Jak to działa
 
-1. **Drużyny** — nazwy, kolory strojów i wybór, dla której drużyny (lub obu) prowadzisz statystyki.
-2. **Zawodnicy** — numer i nazwisko (obowiązkowe), imię (opcjonalne). Można wkleić całą listę naraz
+1. **Drużyny** — jedną z drużyn jest zawsze **ŁKS U15**; wybierasz, czy gra jako gospodarz, czy gość.
+   Dla rywala podajesz nazwę. Obu drużynom ustawiasz kolor strojów i decydujesz, dla której (lub obu) prowadzisz statystyki.
+2. **Skład meczowy / zawodnicy** — ŁKS U15 ma stały skład (lista `LKS_ROSTER` w `js/app.js`); dotykasz zawodników,
+   którzy grają w danym meczu. Można dodać zawodnika spoza listy tylko na jeden mecz.
+   Dla rywala: numer i nazwisko (obowiązkowe), imię (opcjonalne); można wkleić całą listę naraz
    (jeden zawodnik w linii: `numer nazwisko imię`).
 3. **Pierwsza piątka** — dotknij pięciu zawodników.
 4. **Mecz** — dotknij zawodnika, a potem akcji (albo odwrotnie). Każda akcja to 2 dotknięcia.
@@ -37,7 +40,7 @@ Nic nie jest wysyłane na żaden serwer. Bieżący mecz jest przechowywany tylko
 |---|---|
 | `index.html` | szkielet strony |
 | `css/style.css` | wygląd |
-| `js/app.js` | cała logika aplikacji |
+| `js/app.js` | cała logika aplikacji; na górze stały skład ŁKS U15 (`LKS_ROSTER`) |
 | `lib/` | pdfmake (generowanie PDF z polskimi znakami) |
 | `sw.js` | działanie offline. **Po każdej zmianie plików podbij `VERSION`**, żeby telefony pobrały nową wersję |
 | `manifest.webmanifest`, `icons/` | instalacja na ekranie głównym telefonu |

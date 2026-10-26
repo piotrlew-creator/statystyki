@@ -13,6 +13,19 @@
     '#1e8c45', '#4fb3e8', '#1f5fbf', '#1b2a55', '#6a3bb5', '#8a8f98',
   ];
 
+  // Stały skład ŁKS U15 — zawsze dostępny; w każdym meczu wybierasz z niego skład meczowy.
+  // [numer, nazwisko, imię]
+  const LKS_NAME = 'ŁKS U15';
+  const LKS_ROSTER = [
+    ['0', 'Łęczyński', 'Antek'], ['1', 'Krawczyk', 'Wojtek'], ['2', 'Morou', 'Amadeusz'], ['3', 'Kluka', 'Rysiek'],
+    ['5', 'Pawlak', 'Franek'], ['6', 'Walasik', 'Tymek'], ['7', 'Budner', 'Igor'], ['10', 'Domżał', 'Michał'],
+    ['11', 'Buchacz', 'Julek'], ['12', 'Krysiak', 'Stanisław'], ['13', 'Juchacz', 'Oskar'], ['14', 'Miśkiewicz', 'Bartek'],
+    ['17', 'Lewandowski', 'Leon'], ['18', 'Sikora', 'Tomek'], ['34', 'Marciniak', 'Jan'], ['39', 'Karbowiak', 'Maciek'],
+    ['43', 'Kęcerski', 'Bartek'], ['44', 'Fajst-Święcicki', 'Miłosz'], ['45', 'Skalczyński', 'Bartek'], ['48', 'Petera', 'Michał'],
+    ['52', 'Rzeźniczak', 'Radek'], ['66', 'Karpik', 'Hubert'], ['78', 'Omieciński', 'Marcel'], ['79', 'Chruściński', 'Igor'],
+    ['87', 'Krysiak', 'Maciek'],
+  ];
+
   // Wszystkie rodzaje zdarzeń zapisywanych w meczu
   const A = {
     p1m: { label: 'Celny za 1', short: '+1' },
@@ -54,6 +67,8 @@
   const teamName = (t) => (t.name || '').trim() || (t.id === 'A' ? 'Gospodarze' : 'Goście');
   const tracked = () => state.teams.filter((t) => t.tracked);
   const playerById = (t, pid) => t.players.find((p) => p.id === pid);
+  const squadOf = (t) => t.players.filter((p) => t.squad.includes(p.id));
+  const lksTeam = () => state.teams.find((t) => t.lks);
   const sortPlayers = (arr) => arr.slice().sort((a, b) => (parseInt(a.num, 10) - parseInt(b.num, 10)) || String(a.num).localeCompare(String(b.num)));
   const qLabel = (q) => (q <= 4 ? `${q}. kw.` : `Dogr. ${q - 4}`);
   const qShort = (q) => (q <= 4 ? String(q) : `D${q - 4}`);
@@ -72,11 +87,15 @@
     return {
       v: 1, screen: 'teams', created: Date.now(), finished: false, quarter: 1, hints: true, setupTab: 'A',
       teams: [
-        { id: 'A', name: '', color: '#d0202e', tracked: true, players: [], onCourt: [] },
-        { id: 'B', name: '', color: '#ffffff', tracked: false, players: [], onCourt: [] },
+        { id: 'A', lks: true, name: LKS_NAME, color: '#d0202e', tracked: true, players: lksPlayers(), squad: [], onCourt: [] },
+        { id: 'B', name: '', color: '#ffffff', tracked: false, players: [], squad: [], onCourt: [] },
       ],
       events: [],
     };
+  }
+
+  function lksPlayers() {
+    return LKS_ROSTER.map(([num, last, first]) => ({ id: 'lks-' + num, num, last, first }));
   }
 
   function load() {
@@ -84,7 +103,10 @@
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && s.v === 1 && Array.isArray(s.teams)) return s;
+        if (s && s.v === 1 && Array.isArray(s.teams)) {
+          s.teams.forEach((t) => { if (!Array.isArray(t.squad)) t.squad = t.players.map((p) => p.id); });
+          return s;
+        }
       }
     } catch (e) { /* brak dostępu do pamięci */ }
     return null;
@@ -221,7 +243,9 @@
           <span class="jersey"></span>
           <span class="muted small">${t.id === 'A' ? 'Gospodarze' : 'Goście'}</span>
         </div>
-        <input class="field" data-input="tname" data-team="${t.id}" value="${esc(t.name)}" placeholder="Nazwa drużyny" maxlength="40" autocomplete="off">
+        ${t.lks
+    ? `<div class="lks-name">${esc(t.name)} <span class="muted small">· stały skład ${t.players.length} zaw.</span></div>`
+    : `<input class="field" data-input="tname" data-team="${t.id}" value="${esc(t.name)}" placeholder="Nazwa drużyny przeciwnej" maxlength="40" autocomplete="off">`}
         <div class="label">Kolor strojów</div>
         <div class="swatches">
           ${PALETTE.map((c) => `<button class="sw ${c === t.color ? 'on' : ''}" style="background:${c}" data-act="color" data-team="${t.id}" data-color="${c}" aria-label="Kolor ${c}"></button>`).join('')}
@@ -238,6 +262,11 @@
     return `
       ${stepHeader('Drużyny', 1, 'home')}
       <div class="wrap">
+        <div class="label first">${esc(LKS_NAME)} gra jako</div>
+        <div class="seg">
+          <button class="${lksTeam().id === 'A' ? 'on' : ''}" data-act="lks-side" data-side="A">Gospodarze</button>
+          <button class="${lksTeam().id === 'B' ? 'on' : ''}" data-act="lks-side" data-side="B">Goście</button>
+        </div>
         ${cards}
         <p class="muted small">Dla drużyny bez statystyk zapisujesz tylko jej punkty (żeby wynik się zgadzał).</p>
       </div>
@@ -260,8 +289,9 @@
     const t = teamById(state.setupTab);
     const tabs = tr.length > 1 ? `
       <div class="tabs">
-        ${tr.map((x) => `<button class="tab ${x.id === t.id ? 'on' : ''}" style="${teamVars(x)}" data-act="tab" data-team="${x.id}"><span class="dot"></span>${esc(teamName(x))} <span class="cnt">${x.players.length}</span></button>`).join('')}
+        ${tr.map((x) => `<button class="tab ${x.id === t.id ? 'on' : ''}" style="${teamVars(x)}" data-act="tab" data-team="${x.id}"><span class="dot"></span>${esc(teamName(x))} <span class="cnt">${x.squad.length}</span></button>`).join('')}
       </div>` : '';
+    if (t.lks) return renderSquadPicker(t, tabs);
     const list = sortPlayers(t.players).map((p) => `
       <li class="pl-row">
         <span class="num-badge" style="${teamVars(t)}">${esc(p.num)}</span>
@@ -292,6 +322,42 @@
       <div class="footbar"><button class="btn primary block" data-act="players-next">Dalej: pierwsza piątka</button></div>`;
   }
 
+  // ŁKS: wybór składu meczowego ze stałej listy
+  function renderSquadPicker(t, tabs) {
+    const n = t.squad.length;
+    const chips = sortPlayers(t.players).map((p) => `
+      <button class="pchip tall ${t.squad.includes(p.id) ? 'on' : ''}" data-act="squad-toggle" data-team="${t.id}" data-pid="${p.id}">
+        <span class="pc-num">${esc(p.num)}</span><span class="pc-name">${esc(p.last)}</span>${p.first ? `<span class="pc-first">${esc(p.first)}</span>` : ''}
+      </button>`).join('');
+    return `
+      ${stepHeader('Skład meczowy', 2, 'teams')}
+      ${tabs}
+      <div class="wrap">
+        <div class="card" style="${teamVars(t)}">
+          <div class="list-head"><span><span class="dot"></span>${esc(teamName(t))}</span><span class="count ${n ? 'ok' : ''}">W składzie: ${n}</span></div>
+          <p class="muted small" style="margin:0 0 10px">Dotknij zawodników, którzy grają w tym meczu.</p>
+          <div class="chip-grid">${chips}</div>
+          <div class="row2">
+            <button class="btn" data-act="squad-all" data-team="${t.id}">Zaznacz wszystkich</button>
+            <button class="btn" data-act="squad-none" data-team="${t.id}">Wyczyść</button>
+          </div>
+        </div>
+        <button type="button" class="linkbtn" data-act="extra-toggle">${ui.extraOpen ? 'Ukryj' : '＋ Zawodnik spoza listy (tylko na ten mecz)'}</button>
+        ${ui.extraOpen ? `
+          <form class="entry card" data-form="add-player" data-team="${t.id}" autocomplete="off">
+            <div class="entry-row">
+              <input id="in-num" class="field num" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="Nr" enterkeyhint="next">
+              <input id="in-last" class="field" placeholder="Nazwisko *" maxlength="30" enterkeyhint="done" autocapitalize="words">
+            </div>
+            <div class="entry-row">
+              <input id="in-first" class="field" placeholder="Imię (opcjonalnie)" maxlength="30" enterkeyhint="done" autocapitalize="words">
+              <button class="btn primary add" type="submit">Dodaj</button>
+            </div>
+          </form>` : ''}
+      </div>
+      <div class="footbar"><button class="btn primary block" data-act="players-next">Dalej: pierwsza piątka</button></div>`;
+  }
+
   function addPlayer(t, num, last, first) {
     num = String(num || '').trim().replace(/^#/, '');
     last = String(last || '').trim();
@@ -299,20 +365,24 @@
     if (!num || !/^\d{1,3}$/.test(num)) return 'Podaj numer (cyfry).';
     if (!last) return 'Podaj nazwisko.';
     if (t.players.some((p) => p.num === num)) return `Numer ${num} już jest w składzie.`;
-    t.players.push({ id: uid(), num, last, first });
+    const p = { id: uid(), num, last, first };
+    t.players.push(p);
+    t.squad.push(p.id);
     return null;
   }
 
   // ---------- krok 3: pierwsza piątka ----------
   function renderLineup() {
     const blocks = tracked().map((t) => {
-      const need = Math.min(5, t.players.length);
-      if (t.players.length <= 5 && t.onCourt.length !== t.players.length) t.onCourt = t.players.map((p) => p.id);
+      const sq = squadOf(t);
+      t.onCourt = t.onCourt.filter((id) => t.squad.includes(id));
+      const need = Math.min(5, sq.length);
+      if (sq.length <= 5 && t.onCourt.length !== sq.length) t.onCourt = sq.map((p) => p.id);
       return `
         <section class="card lineup" style="${teamVars(t)}">
           <div class="list-head"><span><span class="dot"></span>${esc(teamName(t))}</span><span class="count ${t.onCourt.length === need ? 'ok' : ''}">${t.onCourt.length}/${need}</span></div>
           <div class="chip-grid">
-            ${sortPlayers(t.players).map((p) => `
+            ${sortPlayers(sq).map((p) => `
               <button class="pchip ${t.onCourt.includes(p.id) ? 'on' : ''}" data-act="lineup-toggle" data-team="${t.id}" data-pid="${p.id}">
                 <span class="pc-num">${esc(p.num)}</span><span class="pc-name">${esc(p.last)}</span>
               </button>`).join('')}
@@ -535,7 +605,7 @@
       <table class="qtable"><thead><tr><th></th>${QR.qs.map((q) => `<th>${qShort(q)}</th>`).join('')}<th>Σ</th></tr></thead>
       <tbody>${QR.rows.map((r) => `<tr><td><span class="dot" style="${teamVars(r.t)}"></span>${esc(teamName(r.t))}</td>${r.vals.map((v) => `<td>${v}</td>`).join('')}<td><b>${r.total}</b></td></tr>`).join('')}</tbody></table>`;
     const tables = tracked().map((t) => {
-      const rows = sortPlayers(t.players).map((p) => {
+      const rows = sortPlayers(squadOf(t)).map((p) => {
         const s = S.player(t.id, p.id);
         return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' ? 'em' : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
       }).join('');
@@ -629,7 +699,7 @@
       const T = S.team(t.id);
       const head = [{ text: 'Nr', style: 'th' }, { text: 'Zawodnik', style: 'th' }, ...COLS.map(([, h]) => ({ text: h, style: 'th', alignment: 'center' }))];
       const body = [head];
-      for (const p of sortPlayers(t.players)) {
+      for (const p of sortPlayers(squadOf(t))) {
         const s = S.player(t.id, p.id);
         body.push([
           { text: p.num, alignment: 'center' },
@@ -714,7 +784,7 @@
         <div class="sheet-h" style="${teamVars(t)}"><span class="dot"></span><b>Zmiany — ${esc(teamName(t))}</b><span class="count ${n === 5 ? 'ok' : n > 5 ? 'bad' : ''}">Na boisku: ${n}/5</span></div>
         <p class="muted small">Dotknij, kto schodzi, i kto wchodzi. Podświetleni = na boisku.</p>
         <div class="chip-grid" style="${teamVars(t)}">
-          ${sortPlayers(t.players).map((p) => `
+          ${sortPlayers(squadOf(t)).map((p) => `
             <button class="pchip ${sh.sel.includes(p.id) ? 'on' : ''}" data-act="sub-toggle" data-pid="${p.id}">
               <span class="pc-num">${esc(p.num)}</span><span class="pc-name">${esc(p.last)}</span>
             </button>`).join('')}
@@ -742,7 +812,7 @@
         <div class="menu-list">
           <button class="menu-item" data-act="finish">🏁 Zakończ mecz i pokaż tabelę</button>
           <button class="menu-item" data-act="toggle-hints">💡 Podpowiedzi asyst i zbiórek: <b>${state.hints ? 'wł.' : 'wył.'}</b></button>
-          <button class="menu-item" data-act="same-rosters">🔁 Nowy mecz — te same składy</button>
+          <button class="menu-item" data-act="same-rosters">🔁 Nowy mecz — te same drużyny i składy</button>
           <button class="menu-item danger" data-act="reset">🗑️ Nowy mecz od zera</button>
         </div>
         <div class="sheet-actions"><button class="btn block" data-act="sheet-close">Zamknij</button></div>`;
@@ -756,7 +826,7 @@
     const d = el.dataset;
     switch (d.act) {
       case 'new':
-        if (state && (state.events.length || state.teams.some((t) => t.players.length)) && !confirm('Rozpocząć nowy mecz? Obecny mecz zostanie usunięty z telefonu.')) return;
+        if (state && (state.events.length || state.teams.some((t) => t.squad.length)) && !confirm('Rozpocząć nowy mecz? Obecny mecz zostanie usunięty z telefonu.')) return;
         state = newMatch(); ui.lastId = null; go('teams'); break;
       case 'resume': go(state.screen); break;
       case 'back':
@@ -768,12 +838,30 @@
       }
       case 'teams-next': {
         if (!tracked().length) { toast('Zaznacz co najmniej jedną drużynę do statystyk.', 'bad'); return; }
-        state.setupTab = tracked()[0].id; go('players'); break;
+        state.setupTab = (lksTeam().tracked ? lksTeam() : tracked()[0]).id; go('players'); break;
       }
       case 'tab': state.setupTab = d.team; save(); render(); break;
+      case 'lks-side': {
+        if (lksTeam().id === d.side) return;
+        if (state.events.length) { toast('Nie można zmienić w trakcie meczu.', 'bad'); return; }
+        state.teams.reverse();
+        state.teams[0].id = 'A'; state.teams[1].id = 'B';
+        state.setupTab = lksTeam().id;
+        save(); render(); break;
+      }
+      case 'squad-toggle': {
+        const t = teamById(d.team);
+        if (t.squad.includes(d.pid)) { t.squad = t.squad.filter((id) => id !== d.pid); t.onCourt = t.onCourt.filter((id) => id !== d.pid); }
+        else t.squad.push(d.pid);
+        vibrate(8); save(); render(); break;
+      }
+      case 'squad-all': { const t = teamById(d.team); t.squad = t.players.map((p) => p.id); save(); render(); break; }
+      case 'squad-none': { const t = teamById(d.team); t.squad = []; t.onCourt = []; save(); render(); break; }
+      case 'extra-toggle': ui.extraOpen = !ui.extraOpen; ui.focusNum = ui.extraOpen; render(); break;
       case 'del-player': {
         const t = teamById(d.team);
         t.players = t.players.filter((p) => p.id !== d.pid);
+        t.squad = t.squad.filter((id) => id !== d.pid);
         t.onCourt = t.onCourt.filter((id) => id !== d.pid);
         save(); render(); break;
       }
@@ -796,8 +884,8 @@
         break;
       }
       case 'players-next': {
-        const empty = tracked().find((t) => !t.players.length);
-        if (empty) { state.setupTab = empty.id; save(); render(); toast(`Dodaj zawodników: ${teamName(empty)}.`, 'bad'); return; }
+        const empty = tracked().find((t) => !t.squad.length);
+        if (empty) { state.setupTab = empty.id; save(); render(); toast(empty.lks ? 'Wybierz skład meczowy ŁKS.' : `Dodaj zawodników: ${teamName(empty)}.`, 'bad'); return; }
         go('lineup'); break;
       }
       case 'lineup-toggle': {
@@ -808,7 +896,7 @@
         save(); render(); break;
       }
       case 'start': {
-        const bad = tracked().find((t) => t.onCourt.length !== Math.min(5, t.players.length));
+        const bad = tracked().find((t) => t.onCourt.length !== Math.min(5, t.squad.length));
         if (bad) { toast(`Wybierz pierwszą piątkę: ${teamName(bad)}.`, 'bad'); return; }
         go('live'); break;
       }
@@ -850,11 +938,11 @@
       case 'finish': ui.sheet = null; state.finished = true; go('box'); break;
       case 'toggle-hints': state.hints = !state.hints; clearFollow(); save(); renderSheet(); break;
       case 'same-rosters': {
-        if (!confirm('Nowy mecz z tymi samymi drużynami i zawodnikami? Statystyki obecnego meczu zostaną usunięte.')) return;
+        if (!confirm('Nowy mecz z tymi samymi drużynami i składami? Statystyki obecnego meczu zostaną usunięte.')) return;
         ui.sheet = null;
         state.events = []; state.quarter = 1; state.finished = false; state.created = Date.now(); ui.lastId = null;
         state.teams.forEach((t) => { t.onCourt = []; });
-        go('lineup'); break;
+        go('teams'); break;
       }
       case 'reset': {
         if (!confirm('Usunąć cały mecz i zacząć od zera?')) return;

@@ -307,3 +307,14 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
   .others { grid-auto-rows: minmax(46px, 1fr); }
   .ctx { min-height: 40px; }
 }
+
+/* ---------- ŁKS: strona boiska i skład meczowy ---------- */
+.label.first { margin-top: 2px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--surface); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); margin-bottom: 14px; }
+.seg button { min-height: 44px; border-radius: 9px; font-weight: 700; color: var(--muted); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.lks-name { font-size: 20px; font-weight: 800; min-height: 48px; display: flex; align-items: center; gap: 8px; }
+.pchip.tall { min-height: 70px; }
+.pchip .pc-first { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); opacity: .8; }
+.pchip.on .pc-first { color: inherit; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
