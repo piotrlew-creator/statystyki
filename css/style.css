@@ -330,3 +330,129 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
 .cl-status.ok { color: var(--good); font-weight: 700; }
 .cl-status.bad { color: var(--bad); font-weight: 700; }
 .danger-link { color: #ffb4b4; display: block; margin: 12px auto 0; }
+
+/* =====================================================================
+   TABLET (iPad) i duże ekrany. Telefon w pionie wygląda tak jak dotąd.
+   ===================================================================== */
+@media (min-width: 600px) and (min-height: 600px) {
+  #app { max-width: 920px; }
+  .footbar { max-width: 920px; padding-left: 24px; padding-right: 24px; }
+  .sheet { max-width: 680px; padding: 22px 24px calc(22px + var(--safe-b)); }
+  .wrap { padding-left: 24px; padding-right: 24px; }
+  .topbar { padding-left: 16px; padding-right: 16px; }
+  .tabs { padding-left: 24px; padding-right: 24px; }
+
+  /* konfiguracja */
+  .scr-teams .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .scr-teams .wrap > .label, .scr-teams .wrap > .seg, .scr-teams .wrap > p { grid-column: 1 / -1; }
+  .scr-teams .seg { max-width: 460px; }
+  .scr-teams .team-card { margin-bottom: 0; }
+  .chip-grid { grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .pchip { min-height: 72px; }
+  .pchip.tall { min-height: 80px; }
+  .pchip .pc-num { font-size: 26px; }
+  .pchip .pc-name { font-size: 13px; }
+  .scr-lineup .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .scr-lineup .wrap > .card:only-child { grid-column: 1 / -1; }
+  .scr-lineup .chip-grid { grid-template-columns: repeat(4, 1fr); }
+  .scr-lineup .wrap > .card:only-child .chip-grid { grid-template-columns: repeat(6, 1fr); }
+  .home { max-width: 520px; margin: 0 auto; }
+
+  /* ekran meczu — pion */
+  .score { padding: calc(10px + var(--safe-t)) 20px 10px; }
+  .sc-name { font-size: 16px; }
+  .sc-pts { font-size: 56px; }
+  .sc-sub { font-size: 14px; }
+  .sc-q { height: 48px; font-size: 17px; padding: 0 18px; }
+  .opp-btns button { min-width: 52px; height: 38px; font-size: 16px; }
+  .teams-area { padding: 0 16px; }
+  .tb-head { padding: 10px 2px 6px; }
+  .tb-name { font-size: 17px; }
+  .subs-btn { height: 36px; font-size: 15px; padding: 0 16px; }
+  .tiles { gap: 10px; }
+  .tile { min-height: 100px; border-radius: 16px; }
+  .t-num { font-size: 40px; }
+  .t-name { font-size: 15px; margin-top: 4px; }
+  .t-stat { font-size: 13.5px; margin-top: 3px; }
+  .ctx { margin: 10px 16px; min-height: 58px; font-size: 17px; padding-left: 16px; }
+  .ctx-btn { height: 42px; font-size: 15px; padding: 0 16px; }
+  .num-badge.sm { min-width: 34px; height: 28px; font-size: 16px; }
+  .pad { padding: 4px 16px 14px; gap: 12px; }
+  .shots { gap: 12px; flex: 1 1 0; }
+  .shot-col { gap: 8px; }
+  .shot-h { font-size: 13px; }
+  .shot-col .a { flex: 1 1 0; }
+  .a { border-radius: 16px; min-height: 64px; }
+  .a.made { min-height: 76px; }
+  .a b { font-size: 30px; }
+  .a small { font-size: 13px; }
+  .a.o { font-size: 18px; }
+  .others { gap: 12px; flex: 1 1 0; grid-auto-rows: minmax(64px, 1fr); }
+  .bnav { padding: 6px 16px calc(6px + var(--safe-b)); }
+  .bnav button { min-height: 58px; font-size: 14px; }
+  .bnav button span { font-size: 24px; }
+
+  /* tabela */
+  .scr-box { max-width: 1100px !important; }
+  .scr-box .footbar { max-width: 1100px; }
+  .final b { font-size: 46px; }
+  .final { font-size: 20px; }
+  .qtable { font-size: 16px; }
+  .qtable td:first-child { max-width: 260px; }
+  table.stats { font-size: 15px; width: 100%; }
+  .stats th, .stats td { padding: 9px 6px; }
+  .stats .nm { max-width: 200px; }
+  .box-team h2 { font-size: 20px; }
+  .box-foot { display: grid; grid-template-columns: 1.3fr 1fr 1fr; align-items: stretch; }
+  .box-foot .two { display: contents; }
+  .scr-box .wrap { padding-bottom: 120px; }
+  .log-row { font-size: 17px; padding: 8px 0 8px 8px; }
+}
+
+/* iPad w poziomie (i telefon obrócony poziomo): zawodnicy po lewej, akcje po prawej */
+@media (orientation: landscape) and (min-width: 700px) {
+  #app.scr-live {
+    max-width: none; height: 100vh; height: 100dvh; min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "score score" "teams pad" "ctx pad" "nav nav";
+  }
+  .scr-live .score { grid-area: score; }
+  .scr-live .teams-area { grid-area: teams; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding-top: 6px; min-height: 0; }
+  .scr-live .ctx { grid-area: ctx; margin: 6px 16px 14px; }
+  .scr-live .pad { grid-area: pad; padding: 14px 18px 14px 14px; border-left: 1px solid var(--line); min-height: 0; }
+  .scr-live .bnav { grid-area: nav; }
+  .scr-live .tile { min-height: 0; height: clamp(84px, 15vh, 150px); }
+}
+
+/* niski ekran w poziomie (telefon obrócony) — ciaśniej */
+@media (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
+  .score { padding-top: 2px; padding-bottom: 2px; }
+  .sc-pts { font-size: 24px; margin: 0; }
+  .sc-name, .sc-sub { font-size: 11px; }
+  .sc-q { height: 30px; font-size: 13px; }
+  .opp-btns button { height: 24px; min-width: 32px; font-size: 12px; }
+  .scr-live .teams-area { justify-content: flex-start; overflow-y: auto; padding-top: 2px; gap: 0; }
+  .tb-head { padding: 2px 2px 3px; }
+  .tb-name { font-size: 13px; }
+  .subs-btn { height: 26px; font-size: 12px; }
+  .scr-live .tile { height: 56px; border-radius: 10px; }
+  .t-num { font-size: 20px; }
+  .t-name { font-size: 11px; margin-top: 1px; }
+  .t-stat { font-size: 10.5px; }
+  .ctx { min-height: 36px; font-size: 13.5px; }
+  .scr-live .ctx { margin: 2px 16px 4px; }
+  .ctx-btn { height: 32px; font-size: 13px; }
+  .scr-live .pad { padding: 6px 12px; gap: 6px; }
+  .shots, .others { gap: 6px; }
+  .shot-h { font-size: 10px; }
+  .a, .a.made { min-height: 36px; border-radius: 10px; }
+  .a b { font-size: 18px; }
+  .a small { font-size: 10px; }
+  .a.o { font-size: 13px; }
+  .others { grid-auto-rows: minmax(36px, 1fr); }
+  .bnav { padding-top: 2px; padding-bottom: calc(2px + var(--safe-b)); }
+  .bnav button { min-height: 34px; flex-direction: row; gap: 6px; }
+  .bnav button span { font-size: 18px; }
+}
