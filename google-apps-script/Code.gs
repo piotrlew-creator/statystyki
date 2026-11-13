@@ -19,7 +19,7 @@ const LKS_NAME = 'ŁKS U15';
 const SHEETS = {
   mecze: {
     name: 'Mecze',
-    head: ['ID meczu', 'Data', 'Gospodarze', 'Goście', 'Pkt gosp.', 'Pkt gości', 'ŁKS jako', 'Wynik ŁKS', 'Kwarty', 'Status', 'Zapisano'],
+    head: ['ID meczu', 'Data', 'Gospodarze', 'Goście', 'Pkt gosp.', 'Pkt gości', 'ŁKS jako', 'Wynik ŁKS', 'Kwarty', 'Status', 'Zapisano', 'ZA rywala', 'Faule rywala'],
   },
   stat: {
     name: 'Statystyki',
@@ -70,6 +70,7 @@ function saveMatch(m) {
   shM.appendRow([
     m.id, date, m.home, m.away, m.scoreHome, m.scoreAway, m.lksSide || '', m.lksResult || '',
     m.quarters, m.finished ? 'zakończony' : 'w trakcie', new Date(),
+    m.oppOreb === undefined ? '' : m.oppOreb, m.oppFouls === undefined ? '' : m.oppFouls,
   ]);
 
   // Statystyki
@@ -103,6 +104,9 @@ function sheet(ss, def) {
     sh = ss.insertSheet(def.name);
     sh.getRange(1, 1, 1, def.head.length).setValues([def.head]).setFontWeight('bold').setBackground('#eef1f4');
     sh.setFrozenRows(1);
+  } else if (sh.getLastColumn() < def.head.length) {
+    // nowa wersja skryptu dodała kolumny — uzupełnij nagłówek
+    sh.getRange(1, 1, 1, def.head.length).setValues([def.head]).setFontWeight('bold').setBackground('#eef1f4');
   }
   // usuń pusty domyślny „Arkusz1”, jeśli nic w nim nie ma
   const def1 = ss.getSheetByName('Arkusz1') || ss.getSheetByName('Sheet1');

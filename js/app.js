@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '7'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '8'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -49,6 +49,7 @@
     opp2: { label: '+2 pkt (drużyna)', short: '+2' },
     opp3: { label: '+3 pkt (drużyna)', short: '+3' },
     oppf: { label: 'Faul (drużyna)', short: 'F' },
+    oppreb: { label: 'Zbiórka w ataku (drużyna)', short: 'ZA' },
   };
   // Krótki napis „błysku” na kafelku po zapisaniu akcji
   const FLASH = { p1m: '+1', p2m: '+2', p3m: '+3', p1x: '✕', p2x: '✕', p3x: '✕', oreb: 'ZB', dreb: 'ZB', ast: 'AS', stl: 'PRZ', tov: 'STR', blk: 'BL', pf: 'F', fd: 'FW' };
@@ -165,10 +166,13 @@
     const qPts = { A: {}, B: {} };
     const qFouls = { A: {}, B: {} };
     const extra = { A: 0, B: 0 }; // punkty drużyny bez zawodnika (nieśledzona drużyna)
+    const oppReb = { A: 0, B: 0 }, oppFouls = { A: 0, B: 0 }; // zbiórki w ataku i faule drużyny bez statystyk
     for (const e of state.events) {
+      if (e.a === 'oppreb') { oppReb[e.t]++; continue; }
       const pts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
       if (pts) qPts[e.t][e.q] = (qPts[e.t][e.q] || 0) + pts;
       if (e.a === 'oppf') {
+        oppFouls[e.t]++;
         const fq = Math.min(e.q, 4);
         qFouls[e.t][fq] = (qFouls[e.t][fq] || 0) + 1;
         continue;
@@ -188,7 +192,7 @@
     return {
       player: (t, pid) => derive(players.get(t + ':' + pid) || emptyStats()),
       team: (t) => derive(teamTot[t]),
-      score, qPts, qFouls, extra,
+      score, qPts, qFouls, extra, oppReb, oppFouls,
       maxQ: Math.max(4, state.quarter, ...state.events.map((e) => e.q)),
     };
   }
@@ -444,6 +448,7 @@
         <div class="opp-bar" style="${teamVars(t)}">
           <div class="opp-label"><small>Rywal</small><b><span class="dot"></span>${esc(teamName(t))}</b></div>
           ${[1, 2, 3].map((v) => `<button class="opp-b" data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}
+          <button class="opp-b reb" data-act="opp" data-team="${t.id}" data-v="reb" aria-label="Zbiórka w ataku rywala"><b>ZB</b><small>atak</small></button>
           <button class="opp-b foul" data-act="opp" data-team="${t.id}" data-v="f">Faul</button>
         </div>`).join('');
     const teamBlocks = tracked().map((t) => {
@@ -692,6 +697,14 @@
   const pct = (m, a) => (a ? Math.round((100 * m) / a) + '%' : '–');
   const LEGEND = 'c/w – celne/wykonane · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty';
 
+  // Drużyna bez statystyk zawodników: zbiórki w ataku i faule (porównanie ze zbiórkami w obronie ŁKS)
+  function oppSummaries(S) {
+    return state.teams.filter((t) => !t.tracked).map((t) => {
+      const o = otherTeam(t.id);
+      return { t, pts: S.score[t.id], oreb: S.oppReb[t.id], fouls: S.oppFouls[t.id], ourDreb: o.tracked ? S.team(o.id).dreb : null, ourName: teamName(o) };
+    });
+  }
+
   function quarterRows(S) {
     const qs = Array.from({ length: S.maxQ }, (_, i) => i + 1);
     return { qs, rows: state.teams.map((t) => ({ t, vals: qs.map((q) => S.qPts[t.id][q] || 0), total: S.score[t.id] })) };
@@ -734,6 +747,15 @@
           <div style="${teamVars(tb)}">${esc(teamName(tb))}<span class="dot"></span></div>
         </div>
         ${qTable}
+        ${oppSummaries(S).map((x) => `
+          <div class="opp-sum" style="${teamVars(x.t)}">
+            <div class="opp-sum-h"><span class="dot"></span>${esc(teamName(x.t))} <span class="muted small">· rywal bez statystyk zawodników</span></div>
+            <div class="opp-sum-row">
+              <div><b>${x.oreb}</b><span>zbiórki w ataku rywala</span></div>
+              ${x.ourDreb !== null ? `<div><b>${x.ourDreb}</b><span>zbiórki w obronie ${esc(x.ourName)}</span></div>` : ''}
+              <div><b>${x.fouls}</b><span>faule rywala</span></div>
+            </div>
+          </div>`).join('')}
         ${tables}
         <p class="legend muted small">${LEGEND}</p>
       </div>
@@ -791,6 +813,7 @@
       id: state.id, created: state.created, finished: !!state.finished,
       home: teamName(ta), away: teamName(tb), scoreHome: S.score.A, scoreAway: S.score.B,
       lksSide: lks ? (lks.id === 'A' ? 'gospodarz' : 'gość') : '', lksResult, quarters, rows,
+      oppOreb: oppSummaries(S).length ? oppSummaries(S)[0].oreb : '', oppFouls: oppSummaries(S).length ? oppSummaries(S)[0].fouls : '',
       replay: {
         v: 1, created: state.created, finished: !!state.finished, quarter: state.quarter,
         teams: state.teams.map((t) => ({ id: t.id, lks: !!t.lks, name: t.name, color: t.color, tracked: t.tracked, players: t.players, squad: t.squad })),
@@ -906,6 +929,17 @@
         margin: [0, 0, 0, 14],
       },
     ];
+    for (const x of oppSummaries(S)) {
+      content.push({
+        text: [
+          { text: teamName(x.t) + ' (rywal, bez statystyk zawodników): ', bold: true },
+          `zbiórki w ataku: ${x.oreb}`,
+          x.ourDreb !== null ? `  ·  zbiórki w obronie ${x.ourName}: ${x.ourDreb}` : '',
+          `  ·  faule: ${x.fouls}`,
+        ],
+        style: 'meta', alignment: 'center', margin: [0, -6, 0, 12],
+      });
+    }
 
     for (const t of tracked()) {
       const T = S.team(t.id);
@@ -1040,7 +1074,7 @@
       if (!ev) { ui.sheet = null; return; }
       const t = teamById(ev.t);
       const isOpp = !ev.p;
-      const acts = isOpp ? ['opp1', 'opp2', 'opp3', 'oppf'] : EDIT_ACTIONS;
+      const acts = isOpp ? ['opp1', 'opp2', 'opp3', 'oppreb', 'oppf'] : EDIT_ACTIONS;
       const pls = isOpp ? [] : sortPlayers(t.players.filter((p) => t.squad.includes(p.id) || p.id === sh.p));
       const nQ = Math.max(4, state.quarter, ...state.events.map((e) => e.q));
       inner = `

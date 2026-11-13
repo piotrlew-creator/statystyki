@@ -343,7 +343,7 @@ button.tb-head:active { background: var(--surface); }
   display: flex; align-items: stretch; gap: 6px; padding: 6px 8px;
   background: var(--surface); border-top: 2px solid var(--tc);
 }
-.opp-label { flex: 0 1 auto; min-width: 0; max-width: 32%; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; padding-right: 2px; }
+.opp-label { flex: 0 1 auto; min-width: 0; max-width: 24%; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; padding-right: 2px; }
 .opp-label small { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .opp-label b { font-size: 13px; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .opp-label .dot { width: 10px; height: 10px; margin-right: 5px; }
@@ -355,6 +355,15 @@ button.tb-head:active { background: var(--surface); }
 .opp-b:active { transform: scale(.96); }
 .opp-b.hit { animation: hit .5s ease-out; }
 @keyframes hit { 0% { filter: brightness(1.6); transform: scale(.94); } 100% { filter: none; transform: none; } }
+.opp-b.reb { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; background: #1d3049; box-shadow: inset 0 0 0 1px #2c4a70; }
+.opp-b.reb b { font-size: 15px; }
+.opp-b.reb small { font-size: 10.5px; font-weight: 700; opacity: .85; }
+.opp-sum { background: var(--surface); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); border-left: 4px solid var(--tc); padding: 10px 12px; margin: -6px 0 18px; }
+.opp-sum-h { font-weight: 700; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.opp-sum-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
+.opp-sum-row div { display: flex; flex-direction: column; }
+.opp-sum-row b { font-size: 24px; line-height: 1.1; }
+.opp-sum-row span { font-size: 12px; color: var(--muted); }
 /* pasek podpowiedzi: dwie linijki + przyciski */
 .ctx-l { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; flex: 1; }
 .ctx-l > b, .ctx-l > span, .ctx-l > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -458,6 +467,8 @@ button.tb-head:active { background: var(--surface); }
   .opp-bar { padding: 8px 16px; gap: 10px; }
   .opp-b { min-height: 54px; font-size: 22px; border-radius: 12px; }
   .opp-b.foul { font-size: 18px; }
+  .opp-b.reb b { font-size: 19px; }
+  .opp-b.reb small { font-size: 12px; }
   .opp-label { max-width: 26%; }
   .opp-label small { font-size: 12px; }
   .opp-label b { font-size: 16px; }
