@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '6'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '7'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -439,19 +439,14 @@
         </div>`;
     };
     const f = ui.follow;
-    const oppBlock = (t) => `
-        <section class="team-block opp" style="${teamVars(t)}">
-          <div class="tb-head static">
-            <span class="tb-name"><span class="dot"></span>${esc(teamName(t))}</span>
-            <span class="tb-note">bez statystyk zawodników</span>
-          </div>
-          <div class="opp-row">
-            ${[1, 2, 3].map((v) => `<button class="opp-b" data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}
-            <button class="opp-b foul" data-act="opp" data-team="${t.id}" data-v="f">Faul</button>
-          </div>
-        </section>`;
-    const teamBlocks = state.teams.map((t) => {
-      if (!t.tracked) return oppBlock(t);
+    // Drużyna bez statystyk zawodników: osobny pasek na samym dole, wyraźnie inny niż kafelki ŁKS
+    const oppBars = state.teams.filter((t) => !t.tracked).map((t) => `
+        <div class="opp-bar" style="${teamVars(t)}">
+          <div class="opp-label"><small>Rywal</small><b><span class="dot"></span>${esc(teamName(t))}</b></div>
+          ${[1, 2, 3].map((v) => `<button class="opp-b" data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}
+          <button class="opp-b foul" data-act="opp" data-team="${t.id}" data-v="f">Faul</button>
+        </div>`).join('');
+    const teamBlocks = tracked().map((t) => {
       const court = sortPlayers(t.onCourt.map((id) => playerById(t, id)).filter(Boolean));
       const tiles = court.map((p) => {
         const st = S.player(t.id, p.id);
@@ -498,6 +493,7 @@
         <div class="shots">${shotCol(1)}${shotCol(2)}${shotCol(3)}</div>
         <div class="others">${others}</div>
       </div>
+      ${oppBars}
       <nav class="bnav">
         <button data-act="undo" ${state.events.length ? '' : 'disabled'}><span>↶</span>Cofnij</button>
         <button data-act="go" data-to="log"><span>☰</span>Akcje</button>
