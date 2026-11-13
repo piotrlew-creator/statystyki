@@ -85,7 +85,7 @@
 
   function newMatch() {
     return {
-      v: 1, screen: 'teams', created: Date.now(), finished: false, quarter: 1, hints: true, setupTab: 'A',
+      v: 1, id: uid(), screen: 'teams', created: Date.now(), finished: false, quarter: 1, hints: true, setupTab: 'A',
       teams: [
         { id: 'A', lks: true, name: LKS_NAME, color: '#d0202e', tracked: true, players: lksPlayers(), squad: [], onCourt: [] },
         { id: 'B', name: '', color: '#ffffff', tracked: false, players: [], squad: [], onCourt: [] },
@@ -105,6 +105,7 @@
         const s = JSON.parse(raw);
         if (s && s.v === 1 && Array.isArray(s.teams)) {
           s.teams.forEach((t) => { if (!Array.isArray(t.squad)) t.squad = t.players.map((p) => p.id); });
+          if (!s.id) s.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
           return s;
         }
       }
@@ -231,7 +232,8 @@
         </div>
         ${resume}
         <button class="btn ${hasMatch ? '' : 'primary'} block big" data-act="new">Nowy mecz</button>
-        <p class="muted small center">Dane meczu zostają wyłącznie na tym telefonie.</p>
+        <p class="muted small center">${cloudReady() ? 'Po zakończeniu mecz zapisuje się też w Twoim Arkuszu Google.' : 'Dane meczu zostają wyłącznie na tym telefonie.'}</p>
+        <button class="linkbtn center-link" data-act="cloud-settings">☁️ Arkusz Google: ${cloudReady() ? 'połączony' : 'skonfiguruj'}</button>
       </div>`;
   }
 
@@ -637,11 +639,123 @@
         ${tables}
         <p class="legend muted small">${LEGEND}</p>
       </div>
-      <div class="footbar two">
-        <button class="btn primary" data-act="pdf">Pobierz PDF</button>
-        ${canShare ? '<button class="btn" data-act="share">Udostępnij PDF</button>' : '<button class="btn" data-act="go" data-to="live">Wróć do meczu</button>'}
+      <div class="footbar box-foot">
+        <button class="btn block cloud-btn" data-act="cloud-save">☁️ Zapisz w Arkuszu Google<small>${esc(cloudStatus())}</small></button>
+        <div class="two">
+          <button class="btn primary" data-act="pdf">Pobierz PDF</button>
+          ${canShare ? '<button class="btn" data-act="share">Udostępnij PDF</button>' : '<button class="btn" data-act="go" data-to="live">Wróć do meczu</button>'}
+        </div>
       </div>`;
   }
+
+  // ---------- zapis w Arkuszu Google ----------
+  // Adres skryptu i PIN są tylko w pamięci tego telefonu (nie w kodzie w publicznym repozytorium).
+  const CLOUD_KEY = 'statystyki:cloud';
+  const QUEUE_KEY = 'statystyki:queue';
+  const SENT_KEY = 'statystyki:sent';
+  const lsGet = (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* brak */ } };
+  const cloudCfg = () => lsGet(CLOUD_KEY, null);
+  const cloudReady = () => { const c = cloudCfg(); return !!(c && c.url && c.pin); };
+  let flushing = false;
+
+  function cloudStatus() {
+    if (!cloudReady()) return 'nie skonfigurowano — dotknij, aby ustawić';
+    if (lsGet(QUEUE_KEY, []).some((x) => x.id === state.id)) return 'czeka na wysłanie (brak internetu?)';
+    const t = lsGet(SENT_KEY, {})[state.id];
+    if (t) return 'ostatnio zapisano: ' + new Date(t).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+    return 'jeszcze nie zapisano';
+  }
+
+  function buildCloudMatch() {
+    const S = computeAll();
+    const [ta, tb] = state.teams;
+    const lks = lksTeam();
+    const QR = quarterRows(S);
+    const quarters = QR.qs.map((q) => `${qShort(q)}: ${S.qPts.A[q] || 0}-${S.qPts.B[q] || 0}`).join(', ');
+    let lksResult = '';
+    if (lks && state.finished) {
+      const a = S.score[lks.id], b = S.score[otherTeam(lks.id).id];
+      lksResult = a > b ? 'wygrana' : a < b ? 'porażka' : 'remis';
+    }
+    const rows = [];
+    for (const t of tracked()) {
+      for (const p of sortPlayers(squadOf(t))) {
+        const st = S.player(t.id, p.id);
+        rows.push({
+          team: teamName(t), opponent: teamName(otherTeam(t.id)), num: p.num, last: p.last, first: p.first || '',
+          pts: st.pts, p1m: st.p1m, p1a: st.p1a, p2m: st.p2m, p2a: st.p2a, p3m: st.p3m, p3a: st.p3a,
+          oreb: st.oreb, dreb: st.dreb, reb: st.reb, ast: st.ast, stl: st.stl, tov: st.tov, blk: st.blk, pf: st.pf, fd: st.fd, eval: st.eval,
+        });
+      }
+    }
+    return {
+      id: state.id, created: state.created, finished: !!state.finished,
+      home: teamName(ta), away: teamName(tb), scoreHome: S.score.A, scoreAway: S.score.B,
+      lksSide: lks ? (lks.id === 'A' ? 'gospodarz' : 'gość') : '', lksResult, quarters, rows,
+      replay: {
+        v: 1, created: state.created, finished: !!state.finished, quarter: state.quarter,
+        teams: state.teams.map((t) => ({ id: t.id, lks: !!t.lks, name: t.name, color: t.color, tracked: t.tracked, players: t.players, squad: t.squad })),
+        events: state.events.map((e) => [e.t, e.p, e.a, e.q, e.ts]),
+      },
+    };
+  }
+
+  function queueMatch() {
+    if (!state.id) { state.id = uid(); save(); }
+    const q = lsGet(QUEUE_KEY, []).filter((x) => x.id !== state.id);
+    q.push({ id: state.id, v: Date.now(), match: buildCloudMatch() });
+    lsSet(QUEUE_KEY, q);
+  }
+
+  async function postCloud(url, body) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      const r = await fetch(url, { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow', signal: ctrl.signal });
+      const txt = await r.text();
+      try { return JSON.parse(txt); } catch (e) {
+        return { ok: false, error: 'Nieoczekiwana odpowiedź. Sprawdź adres skryptu i ustawienie „Kto ma dostęp: Każdy”.' };
+      }
+    } finally { clearTimeout(timer); }
+  }
+
+  // Wysyła wszystkie mecze czekające w kolejce. Bez internetu zostają w kolejce na później.
+  async function flushQueue(verbose) {
+    const c = cloudCfg();
+    if (flushing || !c || !c.url) return;
+    let q = lsGet(QUEUE_KEY, []);
+    if (!q.length) return;
+    flushing = true;
+    let sent = 0, offline = false, err = null;
+    for (const item of q) {
+      try {
+        const res = await postCloud(c.url, { pin: c.pin, match: item.match });
+        if (res && res.ok) {
+          sent++;
+          lsSet(QUEUE_KEY, lsGet(QUEUE_KEY, []).filter((x) => !(x.id === item.id && x.v === item.v)));
+          const sentMap = lsGet(SENT_KEY, {}); sentMap[item.id] = Date.now(); lsSet(SENT_KEY, sentMap);
+        } else err = (res && res.error) || 'Nieznany błąd';
+      } catch (e) { offline = true; break; }
+    }
+    flushing = false;
+    if (verbose) {
+      if (offline) toast('Brak internetu — mecz wyśle się sam, gdy wróci zasięg.');
+      else if (err) toast('Arkusz Google: ' + err, 'bad');
+      else if (sent) toast(sent > 1 ? `Zapisano w Arkuszu Google (${sent} mecze) ✓` : 'Zapisano w Arkuszu Google ✓');
+    }
+    if (state && state.screen === 'box' && app.className === 'scr-box') render();
+  }
+
+  function saveToCloud() {
+    if (!cloudReady()) { openSheet({ kind: 'cloud' }); return; }
+    queueMatch();
+    toast('Wysyłam do Arkusza Google…');
+    flushQueue(true);
+  }
+
+  window.addEventListener('online', () => flushQueue(false));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flushQueue(false); });
 
   // ---------- PDF ----------
   function loadScript(src) {
@@ -806,12 +920,28 @@
           ${Array.from({ length: nQ }, (_, i) => i + 1).map((q) => `<button class="qbig ${q === state.quarter ? 'on' : ''}" data-act="q" data-q="${q}">${qLabel(q)}</button>`).join('')}
         </div>
         <div class="sheet-actions"><button class="btn block" data-act="sheet-close">Zamknij</button></div>`;
+    } else if (sh.kind === 'cloud') {
+      const c = cloudCfg() || {};
+      inner = `
+        <div class="sheet-h"><b>☁️ Arkusz Google</b></div>
+        <p class="muted small">Wklej adres skryptu z Arkusza Google (kończy się na <b>/exec</b>) i PIN ustawiony w skrypcie. Te dane zostają tylko na tym telefonie.</p>
+        <div class="label">Adres skryptu</div>
+        <input id="cl-url" class="field" value="${esc(c.url || '')}" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+        <div class="label">PIN</div>
+        <input id="cl-pin" class="field" value="${esc(c.pin || '')}" placeholder="PIN ze skryptu" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+        <div id="cl-status" class="cl-status muted small"></div>
+        <div class="sheet-actions">
+          <button class="btn" data-act="cloud-test">Sprawdź połączenie</button>
+          <button class="btn primary" data-act="cloud-store">Zapisz</button>
+        </div>
+        ${c.url ? '<button class="linkbtn danger-link" data-act="cloud-clear">Odłącz arkusz na tym telefonie</button>' : ''}`;
     } else if (sh.kind === 'menu') {
       inner = `
         <div class="sheet-h"><b>Menu meczu</b></div>
         <div class="menu-list">
           <button class="menu-item" data-act="finish">🏁 Zakończ mecz i pokaż tabelę</button>
           <button class="menu-item" data-act="toggle-hints">💡 Podpowiedzi asyst i zbiórek: <b>${state.hints ? 'wł.' : 'wył.'}</b></button>
+          <button class="menu-item" data-act="cloud-settings">☁️ Arkusz Google: <b>${cloudReady() ? 'połączony' : 'skonfiguruj'}</b></button>
           <button class="menu-item" data-act="same-rosters">🔁 Nowy mecz — te same drużyny i składy</button>
           <button class="menu-item danger" data-act="reset">🗑️ Nowy mecz od zera</button>
         </div>
@@ -935,12 +1065,44 @@
       }
       case 'sheet-close': closeSheet(); break;
       case 'menu': openSheet({ kind: 'menu' }); break;
-      case 'finish': ui.sheet = null; state.finished = true; go('box'); break;
+      case 'finish':
+        ui.sheet = null; state.finished = true; go('box');
+        if (cloudReady()) saveToCloud();
+        break;
+      case 'cloud-save': saveToCloud(); break;
+      case 'cloud-settings': openSheet({ kind: 'cloud' }); break;
+      case 'cloud-test':
+      case 'cloud-store': {
+        const url = document.getElementById('cl-url').value.trim();
+        const pin = document.getElementById('cl-pin').value.trim();
+        const st = document.getElementById('cl-status');
+        if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) { st.textContent = 'Adres powinien zaczynać się od https://script.google.com/ i kończyć na /exec.'; st.className = 'cl-status bad small'; return; }
+        if (!pin) { st.textContent = 'Wpisz PIN.'; st.className = 'cl-status bad small'; return; }
+        if (d.act === 'cloud-store') {
+          lsSet(CLOUD_KEY, { url, pin });
+          closeSheet(); toast('Arkusz Google połączony ✓');
+          if (app.className === 'scr-home') showHome(); else render();
+          flushQueue(true);
+          return;
+        }
+        st.textContent = 'Sprawdzam…'; st.className = 'cl-status muted small';
+        postCloud(url, { pin, test: true })
+          .then((r) => { st.textContent = r.ok ? '✓ Połączenie działa, PIN poprawny.' : '✕ ' + (r.error || 'Błąd'); st.className = 'cl-status small ' + (r.ok ? 'ok' : 'bad'); })
+          .catch(() => { st.textContent = '✕ Brak połączenia. Sprawdź internet i adres.'; st.className = 'cl-status bad small'; });
+        return;
+      }
+      case 'cloud-clear': {
+        if (!confirm('Odłączyć Arkusz Google na tym telefonie? Dane w arkuszu zostaną.')) return;
+        try { localStorage.removeItem(CLOUD_KEY); } catch (e) { /* brak */ }
+        closeSheet(); toast('Odłączono');
+        if (app.className === 'scr-home') showHome(); else render();
+        return;
+      }
       case 'toggle-hints': state.hints = !state.hints; clearFollow(); save(); renderSheet(); break;
       case 'same-rosters': {
         if (!confirm('Nowy mecz z tymi samymi drużynami i składami? Statystyki obecnego meczu zostaną usunięte.')) return;
         ui.sheet = null;
-        state.events = []; state.quarter = 1; state.finished = false; state.created = Date.now(); ui.lastId = null;
+        state.events = []; state.quarter = 1; state.finished = false; state.created = Date.now(); state.id = uid(); ui.lastId = null;
         state.teams.forEach((t) => { t.onCourt = []; });
         go('teams'); break;
       }
@@ -1038,6 +1200,7 @@
 
   // ---------- start: zawsze ekran startowy (z „Wróć do meczu”, jeśli jest mecz w pamięci) ----------
   showHome();
+  setTimeout(() => flushQueue(false), 1500);
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});

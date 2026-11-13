@@ -29,9 +29,20 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
 
 `EVAL = punkty − wszystkie niecelne rzuty (za 1, 2 i 3) + asysty + przechwyty + zbiórki w ataku + zbiórki w obronie + bloki − straty`
 
+## Zapis w Arkuszu Google (opcjonalnie)
+
+Po zakończeniu meczu statystyki mogą się zapisywać w Twoim Arkuszu Google:
+arkusze **Mecze**, **Statystyki** (wiersz na zawodnika), **Sezon** (sumy i średnie ŁKS U15) oraz **Przebieg** (pełna lista akcji).
+
+- Skrypt do wklejenia w Arkuszu Google: `google-apps-script/Code.gs` (ustaw w nim swój `PIN`).
+- Adres skryptu i PIN wpisujesz raz w aplikacji (Menu lub ekran startowy → „Arkusz Google”). Zostają tylko na telefonie,
+  nie ma ich w kodzie w repozytorium.
+- „Zakończ mecz” wysyła mecz automatycznie; w tabeli jest też przycisk „Zapisz w Arkuszu Google”.
+- Bez internetu mecz czeka w kolejce i wysyła się sam, gdy wróci zasięg. Ponowne wysłanie nadpisuje mecz (bez duplikatów).
+
 ## Dane
 
-Nic nie jest wysyłane na żaden serwer. Bieżący mecz jest przechowywany tylko w pamięci przeglądarki na tym telefonie,
+Bez skonfigurowanego Arkusza Google nic nie jest wysyłane na żaden serwer. Bieżący mecz jest przechowywany tylko w pamięci przeglądarki na tym telefonie,
 żeby nie przepadł po przypadkowym odświeżeniu strony lub zamknięciu przeglądarki. „Nowy mecz” go usuwa.
 
 ## Pliki
