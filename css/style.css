@@ -211,7 +211,7 @@ button:disabled { opacity: .4; cursor: default; }
 .ctx.follow { box-shadow: inset 0 0 0 2px var(--good); }
 .ctx.done .ok { color: var(--good); font-weight: 800; flex: none; }
 .ctx.done .ctx-txt { flex: 1; }
-.ctx-btn { height: 34px; padding: 0 12px; border-radius: 8px; background: var(--surface2); font-weight: 700; font-size: 13.5px; flex: none; }
+.ctx-btn { height: 40px; min-width: 40px; padding: 0 12px; border-radius: 9px; background: var(--surface2); font-weight: 700; font-size: 13.5px; flex: none; }
 .timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--good); transform-origin: left; animation: shrink linear forwards; }
 @keyframes shrink { to { transform: scaleX(0); } }
 
@@ -331,6 +331,60 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
 .cl-status.bad { color: var(--bad); font-weight: 700; }
 .danger-link { color: #ffb4b4; display: block; margin: 12px auto 0; }
 
+/* ---------- v5: szybsze wprowadzanie ---------- */
+/* nagłówek drużyny = duży przycisk „Zmiany” */
+button.tb-head { width: 100%; min-height: 40px; text-align: left; border-radius: 10px; }
+button.tb-head:active { background: var(--surface); }
+.tb-head .subs-btn { display: inline-flex; align-items: center; height: 32px; }
+.tb-head.static { min-height: 34px; }
+.tb-note { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* drużyna bez statystyk zawodników */
+.opp-row { display: grid; grid-template-columns: repeat(3, 1fr) 1.2fr; gap: 6px; }
+.opp-b {
+  min-height: 52px; border-radius: 12px; font-size: 20px; font-weight: 800;
+  background: var(--tc); color: var(--tx); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22), inset 0 -14px 0 rgba(0, 0, 0, .12);
+}
+.opp-b.foul { background: #3a1d22; color: #ffd0d0; box-shadow: inset 0 0 0 1px #5b3036; font-size: 17px; }
+.opp-b:active { transform: scale(.96); }
+.opp-b.hit { animation: hit .5s ease-out; }
+@keyframes hit { 0% { filter: brightness(1.6); transform: scale(.94); } 100% { filter: none; transform: none; } }
+/* pasek podpowiedzi: dwie linijki + przyciski */
+.ctx-l { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; flex: 1; }
+.ctx-l > b, .ctx-l > span, .ctx-l > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-l small { font-size: 11.5px; color: var(--muted); }
+.ctx.hint .ctx-l { align-items: center; text-align: center; }
+.ctx-acts { display: flex; gap: 6px; flex: none; }
+.ctx-btn.ft-m { background: var(--good); color: var(--good-ink); min-width: 44px; font-size: 18px; }
+.ctx-btn.ft-x { background: #3a1d22; color: #ffb4b4; min-width: 44px; font-size: 18px; box-shadow: inset 0 0 0 1px #5b3036; }
+.ctx-btn.and1 { background: #2a2140; color: #d9c8ff; box-shadow: inset 0 0 0 1px #4a3a72; }
+.ctx.msg { justify-content: center; box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; }
+.ctx.msg.bad { box-shadow: inset 0 0 0 2px var(--bad); color: #ffd0d0; }
+/* błysk na kafelku po zapisaniu akcji */
+.tile { position: relative; -webkit-touch-callout: none; }
+.flash {
+  position: absolute; inset: 0; display: grid; place-items: center; border-radius: inherit;
+  font-size: 26px; font-weight: 900; color: #fff; background: rgba(10, 14, 20, .55); text-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  animation: flash .8s ease-out forwards; pointer-events: none;
+}
+.flash.good { background: rgba(34, 197, 94, .78); color: #04230f; text-shadow: none; }
+.flash.bad { background: rgba(240, 82, 82, .7); }
+@keyframes flash { 0% { opacity: 0; transform: scale(.7); } 15% { opacity: 1; transform: scale(1.05); } 70% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.sc-pts.bump { animation: bump .45s ease-out; }
+@keyframes bump { 40% { transform: scale(1.18); color: var(--good); } }
+/* lista akcji: edycja */
+.log-txt { flex: 1; text-align: left; min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: inherit; }
+.log-edit { color: var(--muted); font-size: 14px; }
+.log-tip { margin: 4px 0 6px; }
+.edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.edit-q { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.echip { min-height: 44px; padding: 0 10px; border-radius: 10px; background: var(--surface2); box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; font-size: 14px; }
+.edit-q .echip { min-width: 52px; }
+.echip.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.sheet-actions.three { grid-template-columns: 1fr 1fr 1fr; margin-top: 14px; }
+.btn.danger { color: #ffb4b4; box-shadow: inset 0 0 0 1px #5b3036; }
+.note-bad { color: #ffd0d0; background: #3a1d22; border-radius: 10px; padding: 10px 12px; font-weight: 600; margin: 8px 0; }
+.pchip.out { opacity: .5; }
+
 /* =====================================================================
    TABLET (iPad) i duże ekrany. Telefon w pionie wygląda tak jak dotąd.
    ===================================================================== */
@@ -392,6 +446,17 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
   .bnav button { min-height: 58px; font-size: 14px; }
   .bnav button span { font-size: 24px; }
 
+  button.tb-head { min-height: 46px; }
+  .tb-head .subs-btn { height: 38px; }
+  .opp-b { min-height: 76px; font-size: 26px; border-radius: 16px; }
+  .opp-b.foul { font-size: 22px; }
+  .opp-row { gap: 10px; }
+  .tb-note { font-size: 14px; }
+  .ctx-l small { font-size: 13px; }
+  .ctx-btn.ft-m, .ctx-btn.ft-x { min-width: 56px; font-size: 22px; }
+  .flash { font-size: 40px; }
+  .edit-grid { grid-template-columns: repeat(3, 1fr); }
+
   /* tabela */
   .scr-box { max-width: 1100px !important; }
   .scr-box .footbar { max-width: 1100px; }
@@ -410,7 +475,7 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
 }
 
 /* iPad w poziomie (i telefon obrócony poziomo): zawodnicy po lewej, akcje po prawej */
-@media (orientation: landscape) and (min-width: 700px) {
+@media (orientation: landscape) and (min-width: 560px) {
   #app.scr-live {
     max-width: none; height: 100vh; height: 100dvh; min-height: 0;
     display: grid;
@@ -427,11 +492,11 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
 }
 
 /* niski ekran w poziomie (telefon obrócony) — ciaśniej */
-@media (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 520px) {
   .score { padding-top: 2px; padding-bottom: 2px; }
   .sc-pts { font-size: 24px; margin: 0; }
   .sc-name, .sc-sub { font-size: 11px; }
-  .sc-q { height: 30px; font-size: 13px; }
+  .sc-q { height: 36px; font-size: 13px; }
   .opp-btns button { height: 24px; min-width: 32px; font-size: 12px; }
   .scr-live .teams-area { justify-content: flex-start; overflow-y: auto; padding-top: 2px; gap: 0; }
   .tb-head { padding: 2px 2px 3px; }
@@ -453,6 +518,46 @@ table.stats { border-collapse: separate; border-spacing: 0; font-size: 13.5px; m
   .a.o { font-size: 13px; }
   .others { grid-auto-rows: minmax(36px, 1fr); }
   .bnav { padding-top: 2px; padding-bottom: calc(2px + var(--safe-b)); }
-  .bnav button { min-height: 34px; flex-direction: row; gap: 6px; }
+  .bnav button { min-height: 38px; flex-direction: row; gap: 6px; }
   .bnav button span { font-size: 18px; }
+}
+
+/* telefon w poziomie: rząd rywala niższy */
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 520px) {
+  .opp-b { min-height: 40px; font-size: 16px; }
+  button.tb-head { min-height: 36px; }
+  .tb-head .subs-btn { height: 28px; }
+}
+
+/* małe telefony (np. iPhone SE, starsze Androidy): cały ekran meczu bez przewijania */
+@media (max-width: 599px) and (max-height: 660px) {
+  .score { padding-top: calc(3px + var(--safe-t)); padding-bottom: 3px; }
+  .sc-pts { font-size: 28px; margin: 0; }
+  .sc-name { font-size: 12px; }
+  .sc-sub { font-size: 11px; }
+  .sc-q { height: 38px; font-size: 13px; padding: 0 10px; }
+  button.tb-head, .tb-head.static { min-height: 36px; padding: 1px 2px; }
+  .tb-head .subs-btn { height: 26px; font-size: 12px; }
+  .tb-name { font-size: 13px; }
+  .tiles { gap: 5px; }
+  .tile { min-height: 52px; padding: 2px; }
+  .t-num { font-size: 20px; }
+  .t-name { font-size: 10.5px; margin-top: 1px; }
+  .t-stat { font-size: 9.5px; margin-top: 0; }
+  .opp-b { min-height: 44px; font-size: 18px; }
+  .ctx { min-height: 42px; margin: 3px 8px; }
+  .ctx-btn { height: 36px; min-width: 38px; }
+  .pad { gap: 5px; padding: 2px 8px 5px; }
+  .shots { gap: 6px; }
+  .shot-col { gap: 4px; }
+  .shot-h { font-size: 10px; }
+  .a, .a.made { min-height: 42px; }
+  .a b { font-size: 19px; }
+  .a small { font-size: 10px; }
+  .a.o { font-size: 13px; }
+  .others { gap: 6px; grid-auto-rows: minmax(42px, 1fr); }
+  .bnav { padding-top: 2px; }
+  .bnav button { min-height: 42px; flex-direction: row; gap: 6px; font-size: 12px; }
+  .bnav button span { font-size: 17px; }
+  .team-block { margin-bottom: 3px; }
 }

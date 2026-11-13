@@ -5,8 +5,11 @@
  */
 'use strict';
 (() => {
+  const APP_VERSION = '6'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
+  const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
+  const LONG_PRESS_MS = 500; // przytrzymanie kafelka = szybka zmiana
 
   const PALETTE = [
     '#ffffff', '#1a1a1a', '#d0202e', '#7a1f2b', '#ee7a1a', '#f2c230',
@@ -45,7 +48,11 @@
     opp1: { label: '+1 pkt (drużyna)', short: '+1' },
     opp2: { label: '+2 pkt (drużyna)', short: '+2' },
     opp3: { label: '+3 pkt (drużyna)', short: '+3' },
+    oppf: { label: 'Faul (drużyna)', short: 'F' },
   };
+  // Krótki napis „błysku” na kafelku po zapisaniu akcji
+  const FLASH = { p1m: '+1', p2m: '+2', p3m: '+3', p1x: '✕', p2x: '✕', p3x: '✕', oreb: 'ZB', dreb: 'ZB', ast: 'AS', stl: 'PRZ', tov: 'STR', blk: 'BL', pf: 'F', fd: 'FW' };
+  const EDIT_ACTIONS = ['p1m', 'p1x', 'p2m', 'p2x', 'p3m', 'p3x', 'oreb', 'dreb', 'ast', 'stl', 'tov', 'blk', 'pf', 'fd'];
   const OTHER_ACTIONS = [
     ['oreb', 'ZB atak', 'reb'], ['dreb', 'ZB obrona', 'reb'], ['ast', 'Asysta', 'pos'], ['stl', 'Przechwyt', 'pos'],
     ['tov', 'Strata', 'neg'], ['blk', 'Blok', 'pos'], ['pf', 'Faul', 'neg'], ['fd', 'Faul wym.', 'neu'],
@@ -119,8 +126,21 @@
     try { localStorage.removeItem(STORE_KEY); } catch (e) { /* brak */ }
   }
 
-  let toastTimer = null;
+  let toastTimer = null, msgTimer = null;
+  const onLive = () => app.classList.contains('scr-live');
+  function refreshCtx() {
+    const el = app.querySelector('.ctx');
+    if (el && onLive()) el.outerHTML = renderCtx();
+  }
   function toast(msg, kind = '') {
+    // Na ekranie meczu komunikat pojawia się w pasku nad przyciskami (nie zasłania wyniku)
+    if (onLive() && !ui.sheet) {
+      ui.msg = { msg, kind };
+      clearTimeout(msgTimer);
+      msgTimer = setTimeout(() => { ui.msg = null; refreshCtx(); }, 2200);
+      refreshCtx();
+      return;
+    }
     toastEl.textContent = msg;
     toastEl.className = 'show ' + kind;
     clearTimeout(toastTimer);
@@ -148,6 +168,11 @@
     for (const e of state.events) {
       const pts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
       if (pts) qPts[e.t][e.q] = (qPts[e.t][e.q] || 0) + pts;
+      if (e.a === 'oppf') {
+        const fq = Math.min(e.q, 4);
+        qFouls[e.t][fq] = (qFouls[e.t][fq] || 0) + 1;
+        continue;
+      }
       if (e.a.startsWith('opp')) { extra[e.t] += pts; continue; }
       const key = e.t + ':' + e.p;
       if (!players.has(key)) players.set(key, emptyStats());
@@ -172,6 +197,7 @@
   function go(screen) {
     state.screen = screen;
     toastEl.className = '';
+    ui.msg = null;
     ui.selP = ui.selA = null;
     clearFollow();
     save();
@@ -193,7 +219,7 @@
     closeSheetDom();
     const s = state ? state.screen : 'home';
     const fn = { home: renderHome, teams: renderTeams, players: renderPlayers, lineup: renderLineup, live: renderLive, log: renderLog, box: renderBox }[s] || renderHome;
-    app.className = 'scr-' + s;
+    app.className = 'scr-' + s + (s === 'live' ? ' teams-' + tracked().length : '');
     app.innerHTML = fn();
     if (ui.sheet) renderSheet();
     afterRender(s);
@@ -234,6 +260,7 @@
         <button class="btn ${hasMatch ? '' : 'primary'} block big" data-act="new">Nowy mecz</button>
         <p class="muted small center">${cloudReady() ? 'Po zakończeniu mecz zapisuje się też w Twoim Arkuszu Google.' : 'Dane meczu zostają wyłącznie na tym telefonie.'}</p>
         <button class="linkbtn center-link" data-act="cloud-settings">☁️ Arkusz Google: ${cloudReady() ? 'połączony' : 'skonfiguruj'}</button>
+        <p class="muted small center app-ver">Wersja ${APP_VERSION}</p>
       </div>`;
   }
 
@@ -379,7 +406,7 @@
       const sq = squadOf(t);
       t.onCourt = t.onCourt.filter((id) => t.squad.includes(id));
       const need = Math.min(5, sq.length);
-      if (sq.length <= 5 && t.onCourt.length !== sq.length) t.onCourt = sq.map((p) => p.id);
+      if (sq.length <= 5 && t.onCourt.length !== sq.length) { t.onCourt = sq.map((p) => p.id); save(); }
       return `
         <section class="card lineup" style="${teamVars(t)}">
           <div class="list-head"><span><span class="dot"></span>${esc(teamName(t))}</span><span class="count ${t.onCourt.length === need ? 'ok' : ''}">${t.onCourt.length}/${need}</span></div>
@@ -403,18 +430,28 @@
     const [ta, tb] = state.teams;
     const scoreSide = (t, right) => {
       const fouls = S.qFouls[t.id][Math.min(state.quarter, 4)] || 0;
-      const sub = t.tracked
-        ? `<div class="sc-sub ${fouls >= 5 ? 'bad' : fouls >= 4 ? 'warn' : ''}">Faule zesp.: ${fouls}</div>`
-        : `<div class="opp-btns">${[1, 2, 3].map((v) => `<button data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}</div>`;
+      const sub = `<div class="sc-sub ${fouls >= 5 ? 'bad' : fouls >= 4 ? 'warn' : ''}">Faule zesp.: ${fouls}</div>`;
       return `
         <div class="sc-team ${right ? 'right' : ''}" style="${teamVars(t)}">
           <div class="sc-name"><span class="dot"></span><span class="nm">${esc(teamName(t))}</span></div>
-          <div class="sc-pts">${S.score[t.id]}</div>
+          <div class="sc-pts" data-team="${t.id}">${S.score[t.id]}</div>
           ${sub}
         </div>`;
     };
     const f = ui.follow;
-    const teamBlocks = tracked().map((t) => {
+    const oppBlock = (t) => `
+        <section class="team-block opp" style="${teamVars(t)}">
+          <div class="tb-head static">
+            <span class="tb-name"><span class="dot"></span>${esc(teamName(t))}</span>
+            <span class="tb-note">bez statystyk zawodników</span>
+          </div>
+          <div class="opp-row">
+            ${[1, 2, 3].map((v) => `<button class="opp-b" data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}
+            <button class="opp-b foul" data-act="opp" data-team="${t.id}" data-v="f">Faul</button>
+          </div>
+        </section>`;
+    const teamBlocks = state.teams.map((t) => {
+      if (!t.tracked) return oppBlock(t);
       const court = sortPlayers(t.onCourt.map((id) => playerById(t, id)).filter(Boolean));
       const tiles = court.map((p) => {
         const st = S.player(t.id, p.id);
@@ -432,10 +469,10 @@
       while (tiles.length < 5) tiles.push('<div class="tile empty"></div>');
       return `
         <section class="team-block" style="${teamVars(t)}">
-          <div class="tb-head">
+          <button class="tb-head" data-act="subs" data-team="${t.id}">
             <span class="tb-name"><span class="dot"></span>${esc(teamName(t))}</span>
-            <button class="subs-btn" data-act="subs" data-team="${t.id}">⇄ Zmiany</button>
-          </div>
+            <span class="subs-btn">⇄ Zmiany</span>
+          </button>
           <div class="tiles">${tiles.join('')}</div>
         </section>`;
     }).join('');
@@ -479,12 +516,23 @@
   function renderCtx() {
     const f = ui.follow;
     if (f) {
-      const q = { ast: 'Asysta?', reb: 'Zbiórka?', tov: 'Kto stracił piłkę?', fd: 'Kto wymusił faul?', pf: 'Kto faulował?' }[f.type];
-      const sub = f.type === 'reb' ? 'dotknij zbierającego' : 'dotknij zawodnika';
+      const PARTS = {
+        ast: ['Asysta?', 'dotknij podającego'], reb: ['Zbiórka?', 'dotknij zbierającego'],
+        tov: ['Kto stracił piłkę?', 'dotknij zawodnika rywala'], fd: ['Kto wymusił faul?', 'dotknij zawodnika rywala'],
+        pf: ['Kto faulował?', 'dotknij zawodnika rywala'],
+      };
+      let title, sub;
+      if (f.ft) {
+        title = f.ftLabel || 'Kolejny wolny?';
+        sub = f.type === 'reb' ? 'albo dotknij zbierającego' : f.type === 'pf' ? 'albo dotknij faulującego' : 'tego samego zawodnika';
+      } else [title, sub] = PARTS[f.type];
       const left = Math.max(0, f.expires - Date.now());
-      return `<div class="ctx follow"><span><b>${q}</b> <span class="muted">${sub}</span></span>
-        <button class="ctx-btn" data-act="follow-skip">Pomiń</button>
-        <i class="timer" style="animation-duration:${HINT_MS}ms;animation-delay:-${HINT_MS - left}ms"></i></div>`;
+      const btns = (f.ft ? '<button class="ctx-btn ft-m" data-act="ft" data-r="m" aria-label="Celny">✓</button><button class="ctx-btn ft-x" data-act="ft" data-r="x" aria-label="Niecelny">✕</button>' : '')
+        + (f.andOne ? '<button class="ctx-btn and1" data-act="and-one">+ faul</button>' : '')
+        + '<button class="ctx-btn" data-act="follow-skip">Pomiń</button>';
+      return `<div class="ctx follow"><span class="ctx-l"><b>${title}</b><small>${sub}</small></span>
+        <span class="ctx-acts">${btns}</span>
+        <i class="timer" style="animation-duration:${f.ms}ms;animation-delay:-${f.ms - left}ms"></i></div>`;
     }
     if (ui.selP) {
       const t = teamById(ui.selP.team), p = playerById(t, ui.selP.pid);
@@ -495,39 +543,80 @@
       return `<div class="ctx pick"><span><b>${A[ui.selA].label}</b> <span class="muted">→ wybierz zawodnika</span></span>
         <button class="ctx-btn" data-act="clear-sel">✕</button></div>`;
     }
+    if (ui.msg) return `<div class="ctx msg ${ui.msg.kind}"><span class="ctx-txt">${esc(ui.msg.msg)}</span></div>`;
     const last = ui.lastId && state.events.find((e) => e.id === ui.lastId);
     if (last) {
       return `<div class="ctx done"><span class="ok">✓</span><span class="ctx-txt">${esc(evDesc(last))}</span>
         <button class="ctx-btn" data-act="undo">Cofnij</button></div>`;
     }
-    return `<div class="ctx hint muted">Dotknij zawodnika, potem akcję — albo odwrotnie.</div>`;
+    return `<div class="ctx hint muted"><span class="ctx-l"><span>Dotknij zawodnika, potem akcję (albo odwrotnie)</span><small>Przytrzymaj kafelek zawodnika = szybka zmiana</small></span></div>`;
   }
 
   // ---------- zapis zdarzeń ----------
-  function record(a, team, pid, chained = false) {
+  // opts.chained — akcja z podpowiedzi (bez kolejnej podpowiedzi); opts.andOne — faul przy celnym rzucie
+  function record(a, team, pid, opts = {}) {
     const ev = { id: uid(), t: team, p: pid, a, q: state.quarter, ts: Date.now() };
     state.events.push(ev);
     ui.lastId = ev.id;
+    ui.msg = null;
     save();
     vibrate();
     clearFollow();
-    if (!chained) setFollow(ev);
+    // 5. faul: od razu okno zmiany tego zawodnika
+    let fouledOut = false;
+    if (a === 'pf' && pid && teamById(team).tracked) {
+      const n = state.events.filter((e) => e.t === team && e.p === pid && e.a === 'pf').length;
+      fouledOut = n === 5;
+    }
+    if (!opts.chained && !fouledOut) setFollow(ev, opts);
     render();
+    flash(ev);
+    if (fouledOut) {
+      const t = teamById(team), p = playerById(t, pid);
+      const bench = squadOf(t).filter((x) => !t.onCourt.includes(x.id));
+      if (bench.length) openQuickSub(team, pid, 'fouls');
+      else toast(`#${p.num} ${p.last}: 5 fauli — brak zawodników na ławce`, 'bad');
+    }
   }
 
-  function setFollow(ev) {
+  // Krótki „błysk” na kafelku zawodnika (i podbicie wyniku przy punktach) — widać kątem oka, że akcja się zapisała
+  function flash(ev) {
+    try {
+      if (ev.p && FLASH[ev.a]) {
+        const el = app.querySelector(`.tile[data-team="${ev.t}"][data-pid="${ev.p}"]`);
+        if (el) {
+          const sp = document.createElement('span');
+          sp.className = 'flash ' + (/m$/.test(ev.a) && ev.a[0] === 'p' ? 'good' : /x$/.test(ev.a) && ev.a[0] === 'p' ? 'bad' : '');
+          sp.textContent = FLASH[ev.a];
+          el.appendChild(sp);
+        }
+      }
+      const pts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[ev.a];
+      if (pts) { const sc = app.querySelector(`.sc-pts[data-team="${ev.t}"]`); if (sc) sc.classList.add('bump'); }
+      if (ev.a.startsWith('opp')) { const b = app.querySelector(`.opp-b[data-team="${ev.t}"][data-v="${ev.a.slice(3)}"]`); if (b) b.classList.add('hit'); }
+    } catch (e) { /* tylko efekt wizualny */ }
+  }
+
+  function setFollow(ev, opts = {}) {
     if (!state.hints || !ev.p) return;
     const t = teamById(ev.t), o = otherTeam(ev.t);
     const keys = (team, exclude) => team.onCourt.filter((id) => id !== exclude).map((id) => team.id + ':' + id);
-    let type = null, elig = [];
-    if (ev.a === 'p2m' || ev.a === 'p3m') { type = 'ast'; elig = keys(t, ev.p); }
-    else if (['p1x', 'p2x', 'p3x'].includes(ev.a)) { type = 'reb'; elig = keys(t).concat(o.tracked ? keys(o) : []); }
+    const shooter = { team: ev.t, pid: ev.p };
+    let type = null, elig = [], ft = null, andOne = null, ms = HINT_MS, ftLabel = null;
+    if (ev.a === 'p2m' || ev.a === 'p3m') { type = 'ast'; elig = keys(t, ev.p); andOne = shooter; }
+    else if (ev.a === 'p1m') { ft = shooter; ms = FT_MS; }
+    else if (ev.a === 'p1x') { type = 'reb'; elig = keys(t).concat(o.tracked ? keys(o) : []); ft = shooter; ms = FT_MS; }
+    else if (ev.a === 'p2x' || ev.a === 'p3x') { type = 'reb'; elig = keys(t).concat(o.tracked ? keys(o) : []); }
     else if (ev.a === 'stl' && o.tracked) { type = 'tov'; elig = keys(o); }
     else if (ev.a === 'pf' && o.tracked) { type = 'fd'; elig = keys(o); }
-    else if (ev.a === 'fd' && o.tracked) { type = 'pf'; elig = keys(o); }
-    if (!type || !elig.length) return;
-    ui.follow = { type, elig: new Set(elig), src: ev.t, expires: Date.now() + HINT_MS };
-    followTimer = setTimeout(() => { ui.follow = null; if (state.screen === 'live') render(); }, HINT_MS);
+    else if (ev.a === 'fd') {
+      if (o.tracked) { type = 'pf'; elig = keys(o); }
+      if (opts.andOne) { ft = shooter; ms = FT_MS; ftLabel = 'Rzut wolny (and-one)?'; }
+    }
+    if (type && !elig.length) type = null;
+    if (!type && !ft && !andOne) return;
+    ui.follow = { type, elig: new Set(type ? elig : []), src: ev.t, ft, andOne, ftLabel, ms, expires: Date.now() + ms };
+    followTimer = setTimeout(() => { ui.follow = null; if (state.screen === 'live' && onLive()) { if (ui.sheet) return; render(); } }, ms);
   }
   function clearFollow() {
     clearTimeout(followTimer);
@@ -539,7 +628,13 @@
     const key = team + ':' + pid;
     if (f && f.elig.has(key)) {
       const a = f.type === 'reb' ? (team === f.src ? 'oreb' : 'dreb') : f.type;
-      record(a, team, pid, true);
+      record(a, team, pid, { chained: true });
+      // and-one: po wskazaniu faulującego nadal czekamy na wynik rzutu wolnego
+      if (f.ft && f.type === 'pf' && !ui.sheet && state.hints) {
+        ui.follow = { type: null, elig: new Set(), src: f.src, ft: f.ft, ftLabel: f.ftLabel, ms: FT_MS, expires: Date.now() + FT_MS };
+        followTimer = setTimeout(() => { ui.follow = null; if (onLive() && !ui.sheet) render(); }, FT_MS);
+        render();
+      }
       return;
     }
     clearFollow();
@@ -555,6 +650,10 @@
     render();
   }
 
+  function openQuickSub(team, pid, reason) {
+    openSheet({ kind: 'qsub', team, pid, reason });
+  }
+
   function undo() {
     const e = state.events.pop();
     if (!e) return;
@@ -562,7 +661,9 @@
     ui.lastId = null;
     save();
     vibrate(25);
-    toast('Cofnięto: ' + evDesc(e));
+    ui.msg = { msg: 'Cofnięto: ' + evDesc(e), kind: '' };
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { ui.msg = null; refreshCtx(); }, 2200);
     render();
   }
 
@@ -574,7 +675,8 @@
       const t = teamById(e.t);
       let head = '';
       if (e.q !== curQ) { curQ = e.q; head = `<li class="log-q">${qLabel(e.q)}</li>`; }
-      return `${head}<li class="log-row" style="${teamVars(t)}"><span class="dot"></span><span class="log-txt">${esc(evDesc(e))}</span>
+      return `${head}<li class="log-row" style="${teamVars(t)}"><span class="dot"></span>
+        <button class="log-txt" data-act="edit-event" data-id="${e.id}">${esc(evDesc(e))}<span class="log-edit">✎</span></button>
         <button class="icon-btn del" data-act="del-event" data-id="${e.id}" aria-label="Usuń">✕</button></li>`;
     }).join('');
     return `
@@ -582,7 +684,7 @@
         <button class="icon-btn" data-act="go" data-to="live" aria-label="Wstecz">‹</button>
         <div class="tb-title">Akcje (${state.events.length})</div><div></div>
       </header>
-      <div class="wrap"><ul class="log">${rows || '<li class="empty muted">Brak zapisanych akcji.</li>'}</ul></div>`;
+      <div class="wrap"><p class="muted small log-tip">Dotknij akcji, aby ją poprawić (zawodnik, rodzaj, kwarta). ✕ usuwa.</p><ul class="log">${rows || '<li class="empty muted">Brak zapisanych akcji.</li>'}</ul></div>`;
   }
 
   // ---------- tabela ----------
@@ -883,7 +985,15 @@
   }
 
   // ---------- arkusze (zmiany, menu) ----------
-  function openSheet(sheet) { ui.sheet = sheet; renderSheet(); }
+  function openSheet(sheet) {
+    ui.sheet = sheet;
+    if (onLive()) {
+      // otwarcie okna w trakcie meczu czyści zaznaczenie (żeby po zamknięciu nie wisiało „zaznaczone”)
+      ui.selP = ui.selA = null;
+      clearFollow();
+      render();
+    } else renderSheet();
+  }
   function closeSheet() { ui.sheet = null; closeSheetDom(); }
   function closeSheetDom() { sheetRoot.innerHTML = ''; document.body.classList.remove('sheet-open'); }
 
@@ -911,6 +1021,44 @@
         <div class="sheet-actions">
           <button class="btn" data-act="sheet-close">Anuluj</button>
           <button class="btn primary" data-act="sub-done" ${n >= 1 && n <= 5 ? '' : 'disabled'}>Gotowe</button>
+        </div>`;
+    } else if (sh.kind === 'qsub') {
+      const t = teamById(sh.team), out = playerById(t, sh.pid);
+      const S = computeAll();
+      const bench = sortPlayers(squadOf(t).filter((x) => !t.onCourt.includes(x.id)));
+      inner = `
+        <div class="sheet-h" style="${teamVars(t)}"><span class="dot"></span><b>Schodzi #${esc(out.num)} ${esc(out.last)}</b></div>
+        ${sh.reason === 'fouls' ? '<p class="note-bad">5 fauli — zawodnik musi zejść. Kto wchodzi?</p>' : '<p class="muted small">Kto wchodzi? Dotknij zawodnika z ławki.</p>'}
+        <div class="chip-grid" style="${teamVars(t)}">
+          ${bench.map((p) => { const pf = S.player(t.id, p.id).pf; return `
+            <button class="pchip ${pf >= 5 ? 'out' : ''}" data-act="qsub-pick" data-pid="${p.id}">
+              <span class="pc-num">${esc(p.num)}</span><span class="pc-name">${esc(p.last)}</span>${pf ? `<span class="pc-first">${pf} F</span>` : ''}
+            </button>`; }).join('') || '<p class="muted">Brak zawodników na ławce.</p>'}
+        </div>
+        <div class="sheet-actions">
+          <button class="btn" data-act="sheet-close">${sh.reason === 'fouls' ? 'Później' : 'Anuluj'}</button>
+          <button class="btn" data-act="subs" data-team="${t.id}">Więcej zmian…</button>
+        </div>`;
+    } else if (sh.kind === 'edit') {
+      const ev = state.events.find((e) => e.id === sh.id);
+      if (!ev) { ui.sheet = null; return; }
+      const t = teamById(ev.t);
+      const isOpp = !ev.p;
+      const acts = isOpp ? ['opp1', 'opp2', 'opp3', 'oppf'] : EDIT_ACTIONS;
+      const pls = isOpp ? [] : sortPlayers(t.players.filter((p) => t.squad.includes(p.id) || p.id === sh.p));
+      const nQ = Math.max(4, state.quarter, ...state.events.map((e) => e.q));
+      inner = `
+        <div class="sheet-h" style="${teamVars(t)}"><span class="dot"></span><b>Popraw akcję — ${esc(teamName(t))}</b></div>
+        <div class="label">Akcja</div>
+        <div class="edit-grid">${acts.map((k) => `<button class="echip ${sh.a === k ? 'on' : ''}" data-act="edit-a" data-a="${k}">${A[k].label}</button>`).join('')}</div>
+        ${isOpp ? '' : `<div class="label">Zawodnik</div>
+        <div class="chip-grid" style="${teamVars(t)}">${pls.map((p) => `<button class="pchip ${sh.p === p.id ? 'on' : ''}" data-act="edit-p" data-pid="${p.id}"><span class="pc-num">${esc(p.num)}</span><span class="pc-name">${esc(p.last)}</span></button>`).join('')}</div>`}
+        <div class="label">Kwarta</div>
+        <div class="edit-q">${Array.from({ length: nQ }, (_, i) => i + 1).map((q) => `<button class="echip ${sh.q === q ? 'on' : ''}" data-act="edit-q" data-q="${q}">${qShort(q)}</button>`).join('')}</div>
+        <div class="sheet-actions three">
+          <button class="btn danger" data-act="edit-del">Usuń</button>
+          <button class="btn" data-act="sheet-close">Anuluj</button>
+          <button class="btn primary" data-act="edit-save">Zapisz</button>
         </div>`;
     } else if (sh.kind === 'quarter') {
       const nQ = Math.max(5, state.quarter + 1);
@@ -1032,7 +1180,46 @@
       }
       case 'player': tapPlayer(d.team, d.pid); break;
       case 'action': tapAction(d.a); break;
-      case 'opp': clearFollow(); ui.selP = ui.selA = null; record('opp' + d.v, d.team, null, true); break;
+      case 'opp': clearFollow(); ui.selP = ui.selA = null; record('opp' + d.v, d.team, null, { chained: true }); break;
+      case 'ft': {
+        const f = ui.follow; if (!f || !f.ft) return;
+        record(d.r === 'm' ? 'p1m' : 'p1x', f.ft.team, f.ft.pid);
+        break;
+      }
+      case 'and-one': {
+        const f = ui.follow; if (!f || !f.andOne) return;
+        record('fd', f.andOne.team, f.andOne.pid, { andOne: true });
+        break;
+      }
+      case 'qsub-pick': {
+        const sh = ui.sheet; const t = teamById(sh.team);
+        const outP = playerById(t, sh.pid), inP = playerById(t, d.pid);
+        t.onCourt = t.onCourt.map((id) => (id === sh.pid ? d.pid : id));
+        ui.sheet = null; save(); render();
+        toast(`Zmiana: #${outP.num} ${outP.last} ⇄ #${inP.num} ${inP.last}`);
+        break;
+      }
+      case 'edit-event': {
+        const ev = state.events.find((e) => e.id === d.id); if (!ev) return;
+        openSheet({ kind: 'edit', id: ev.id, a: ev.a, p: ev.p, q: ev.q });
+        break;
+      }
+      case 'edit-a': ui.sheet.a = d.a; renderSheet(); break;
+      case 'edit-p': ui.sheet.p = d.pid; renderSheet(); break;
+      case 'edit-q': ui.sheet.q = +d.q; renderSheet(); break;
+      case 'edit-save': {
+        const sh = ui.sheet; const ev = state.events.find((e) => e.id === sh.id);
+        if (ev) { ev.a = sh.a; ev.p = sh.p; ev.q = sh.q; }
+        ui.sheet = null; save(); render(); toast('Poprawiono: ' + evDesc(ev));
+        break;
+      }
+      case 'edit-del': {
+        const sh = ui.sheet; const i = state.events.findIndex((e) => e.id === sh.id);
+        ui.sheet = null;
+        if (i >= 0) { const [e] = state.events.splice(i, 1); if (ui.lastId === e.id) ui.lastId = null; save(); render(); toast('Usunięto: ' + evDesc(e)); }
+        else render();
+        break;
+      }
       case 'q': {
         const q = +d.q;
         ui.sheet = null;
@@ -1121,7 +1308,40 @@
     }
   }
 
+  // ---------- przytrzymanie kafelka = szybka zmiana ----------
+  let lp = null, suppressUntil = 0, lpFired = false;
+  const cancelLp = () => { if (lp) { clearTimeout(lp.timer); lp = null; } };
+  document.addEventListener('pointerdown', (e) => {
+    const tile = e.target.closest('.tile[data-act=player]');
+    if (!tile || ui.sheet) return;
+    cancelLp();
+    lp = {
+      x: e.clientX, y: e.clientY,
+      timer: setTimeout(() => {
+        lp = null; lpFired = true;
+        vibrate(30);
+        openQuickSub(tile.dataset.team, tile.dataset.pid, 'manual');
+      }, LONG_PRESS_MS),
+    };
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (lp && (Math.abs(e.clientX - lp.x) > 12 || Math.abs(e.clientY - lp.y) > 12)) cancelLp();
+  });
+  const endPress = () => {
+    cancelLp();
+    // po przytrzymaniu ignorujemy „kliknięcie”, które przeglądarka wysyła przy puszczeniu palca
+    if (lpFired) { lpFired = false; suppressUntil = Date.now() + 600; }
+  };
+  document.addEventListener('pointerup', endPress);
+  document.addEventListener('pointercancel', endPress);
+  document.addEventListener('contextmenu', (e) => { if (e.target.closest('.tile')) e.preventDefault(); });
+
   document.addEventListener('click', (e) => {
+    // tuż po przytrzymaniu ignorujemy „kliknięcie-widmo” poza oknem (np. w tło, które zamknęłoby okno)
+    if (Date.now() < suppressUntil) {
+      if (!e.target.closest('.sheet')) { e.preventDefault(); e.stopPropagation(); return; }
+      suppressUntil = 0; // świadome dotknięcie w oknie — dalej wszystko działa normalnie
+    }
     const el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
     if (el.tagName === 'LABEL') return;
@@ -1203,6 +1423,16 @@
   setTimeout(() => flushQueue(false), 1500);
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => { reg.update().catch(() => {}); })
+      .catch(() => {});
+    // Gdy pobierze się nowa wersja aplikacji: na ekranie startowym odśwież od razu,
+    // w trakcie meczu nie przeszkadzaj (nowa wersja włączy się przy następnym otwarciu).
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading || !app.classList.contains('scr-home')) return;
+      reloading = true;
+      location.reload();
+    });
   }
 })();

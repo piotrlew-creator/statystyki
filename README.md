@@ -60,5 +60,5 @@ Bez skonfigurowanego Arkusza Google nic nie jest wysyłane na żaden serwer. Bie
 | `css/style.css` | wygląd |
 | `js/app.js` | cała logika aplikacji; na górze stały skład ŁKS U15 (`LKS_ROSTER`) |
 | `lib/` | pdfmake (generowanie PDF z polskimi znakami) |
-| `sw.js` | działanie offline. **Po każdej zmianie plików podbij `VERSION`**, żeby telefony pobrały nową wersję |
+| `sw.js` | działanie offline. **Po każdej zmianie plików podbij `VERSION` w `sw.js` i `APP_VERSION` w `js/app.js`** — numer wersji widać na ekranie startowym aplikacji |
 | `manifest.webmanifest`, `icons/` | instalacja na ekranie głównym telefonu |

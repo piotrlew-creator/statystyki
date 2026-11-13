@@ -1,6 +1,6 @@
 // Service worker: aplikacja działa także bez internetu (np. na hali bez zasięgu).
 // Przy każdej zmianie plików podbij numer wersji, żeby telefony pobrały nowe pliki.
-const VERSION = 'statystyki-v4';
+const VERSION = 'statystyki-v6';
 const FILES = [
   './',
   'index.html',
@@ -15,7 +15,7 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -29,8 +29,10 @@ self.addEventListener('activate', (e) => {
 // Najpierw sieć (zawsze najnowsza wersja), a bez internetu — kopia z pamięci telefonu.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  // cache: 'no-cache' — zawsze pytamy serwer, czy plik się zmienił (bez tego GitHub Pages pozwala
+  // przeglądarce trzymać starą wersję do 10 minut)
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         const copy = res.clone();
         caches.open(VERSION).then((c) => c.put(e.request, copy));
