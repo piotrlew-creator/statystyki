@@ -25,7 +25,7 @@ const SHEETS = {
     name: 'Statystyki',
     head: ['ID meczu', 'Data', 'Rywal', 'Drużyna', 'Nr', 'Nazwisko', 'Imię', 'PKT',
       '1 pkt celne', '1 pkt wyk.', '2 pkt celne', '2 pkt wyk.', '3 pkt celne', '3 pkt wyk.',
-      'ZA', 'ZO', 'ZB', 'AS', 'PRZ', 'STR', 'BL', 'FP', 'FW', 'EVAL'],
+      'ZA', 'ZO', 'ZB', 'AS', 'PRZ', 'STR', 'BL', 'FP', 'FW', 'EVAL', '+/−'],
   },
   przebieg: {
     name: 'Przebieg',
@@ -79,7 +79,7 @@ function saveMatch(m) {
   const rows = (m.rows || []).map((r) => [
     m.id, date, r.opponent, r.team, r.num, r.last, r.first || '', r.pts,
     r.p1m, r.p1a, r.p2m, r.p2a, r.p3m, r.p3a,
-    r.oreb, r.dreb, r.reb, r.ast, r.stl, r.tov, r.blk, r.pf, r.fd, r.eval,
+    r.oreb, r.dreb, r.reb, r.ast, r.stl, r.tov, r.blk, r.pf, r.fd, r.eval, r.pm === undefined ? '' : r.pm,
   ]);
   if (rows.length) shS.getRange(shS.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 

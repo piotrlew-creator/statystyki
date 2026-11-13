@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '8'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '9'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -62,6 +62,16 @@
   const app = document.getElementById('app');
   const sheetRoot = document.getElementById('sheet-root');
   const toastEl = document.getElementById('toast');
+
+  const THEME_KEY = 'statystyki:theme';
+  let theme = 'dark';
+  try { theme = localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'; } catch (e) { /* brak */ }
+  function applyTheme() {
+    document.documentElement.dataset.theme = theme;
+    const m = document.querySelector('meta[name=theme-color]');
+    if (m) m.setAttribute('content', theme === 'light' ? '#ffffff' : '#11151c');
+  }
+  applyTheme();
 
   let state = load();
   const ui = { selP: null, selA: null, follow: null, lastId: null, sheet: null, pasteOpen: false };
@@ -167,7 +177,15 @@
     const qFouls = { A: {}, B: {} };
     const extra = { A: 0, B: 0 }; // punkty drużyny bez zawodnika (nieśledzona drużyna)
     const oppReb = { A: 0, B: 0 }, oppFouls = { A: 0, B: 0 }; // zbiórki w ataku i faule drużyny bez statystyk
+    const pm = new Map(); // +/−: różnica punktów, gdy zawodnik był na boisku
     for (const e of state.events) {
+      const evPts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
+      if (evPts && e.on) {
+        for (const tid of Object.keys(e.on)) {
+          const sign = tid === e.t ? 1 : -1;
+          for (const pid of e.on[tid]) { const k = tid + ':' + pid; pm.set(k, (pm.get(k) || 0) + sign * evPts); }
+        }
+      }
       if (e.a === 'oppreb') { oppReb[e.t]++; continue; }
       const pts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
       if (pts) qPts[e.t][e.q] = (qPts[e.t][e.q] || 0) + pts;
@@ -190,8 +208,8 @@
     const score = {};
     for (const id of ['A', 'B']) score[id] = Object.values(qPts[id]).reduce((a, b) => a + b, 0);
     return {
-      player: (t, pid) => derive(players.get(t + ':' + pid) || emptyStats()),
-      team: (t) => derive(teamTot[t]),
+      player: (t, pid) => ({ ...derive(players.get(t + ':' + pid) || emptyStats()), pm: pm.get(t + ':' + pid) || 0 }),
+      team: (t) => ({ ...derive(teamTot[t]), pm: null }),
       score, qPts, qFouls, extra, oppReb, oppFouls,
       maxQ: Math.max(4, state.quarter, ...state.events.map((e) => e.q)),
     };
@@ -264,6 +282,7 @@
         <button class="btn ${hasMatch ? '' : 'primary'} block big" data-act="new">Nowy mecz</button>
         <p class="muted small center">${cloudReady() ? 'Po zakończeniu mecz zapisuje się też w Twoim Arkuszu Google.' : 'Dane meczu zostają wyłącznie na tym telefonie.'}</p>
         <button class="linkbtn center-link" data-act="cloud-settings">☁️ Arkusz Google: ${cloudReady() ? 'połączony' : 'skonfiguruj'}</button>
+        <button class="linkbtn center-link" data-act="toggle-theme">${theme === 'light' ? '🌙 Włącz ciemny motyw' : '☀️ Włącz jasny motyw'}</button>
         <p class="muted small center app-ver">Wersja ${APP_VERSION}</p>
       </div>`;
   }
@@ -556,7 +575,7 @@
   // ---------- zapis zdarzeń ----------
   // opts.chained — akcja z podpowiedzi (bez kolejnej podpowiedzi); opts.andOne — faul przy celnym rzucie
   function record(a, team, pid, opts = {}) {
-    const ev = { id: uid(), t: team, p: pid, a, q: state.quarter, ts: Date.now() };
+    const ev = { id: uid(), t: team, p: pid, a, q: state.quarter, ts: Date.now(), on: lineupNow() };
     state.events.push(ev);
     ui.lastId = ev.id;
     ui.msg = null;
@@ -578,6 +597,13 @@
       if (bench.length) openQuickSub(team, pid, 'fouls');
       else toast(`#${p.num} ${p.last}: 5 fauli — brak zawodników na ławce`, 'bad');
     }
+  }
+
+  // Kto był na boisku w chwili akcji (potrzebne do +/−)
+  function lineupNow() {
+    const on = {};
+    for (const t of state.teams) if (t.tracked) on[t.id] = t.onCourt.slice();
+    return on;
   }
 
   // Krótki „błysk” na kafelku zawodnika (i podbicie wyniku przy punktach) — widać kątem oka, że akcja się zapisała
@@ -691,11 +717,12 @@
   // ---------- tabela ----------
   const COLS = [
     ['pts', 'PKT'], ['s1', '1 PKT'], ['s2', '2 PKT'], ['s3', '3 PKT'], ['oreb', 'ZA'], ['dreb', 'ZO'], ['reb', 'ZB'],
-    ['ast', 'AS'], ['stl', 'PRZ'], ['tov', 'STR'], ['blk', 'BL'], ['pf', 'FP'], ['fd', 'FW'], ['eval', 'EVAL'],
+    ['ast', 'AS'], ['stl', 'PRZ'], ['tov', 'STR'], ['blk', 'BL'], ['pf', 'FP'], ['fd', 'FW'], ['pm', '+/−'], ['eval', 'EVAL'],
   ];
-  const cell = (s, k) => (k === 's1' ? `${s.p1m}/${s.p1a}` : k === 's2' ? `${s.p2m}/${s.p2a}` : k === 's3' ? `${s.p3m}/${s.p3a}` : s[k]);
+  const fmtPm = (v) => (v === null || v === undefined ? '' : v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
+  const cell = (s, k) => (k === 's1' ? `${s.p1m}/${s.p1a}` : k === 's2' ? `${s.p2m}/${s.p2a}` : k === 's3' ? `${s.p3m}/${s.p3a}` : k === 'pm' ? fmtPm(s.pm) : s[k]);
   const pct = (m, a) => (a ? Math.round((100 * m) / a) + '%' : '–');
-  const LEGEND = 'c/w – celne/wykonane · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty';
+  const LEGEND = 'c/w – celne/wykonane · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty';
 
   // Drużyna bez statystyk zawodników: zbiórki w ataku i faule (porównanie ze zbiórkami w obronie ŁKS)
   function oppSummaries(S) {
@@ -720,7 +747,7 @@
     const tables = tracked().map((t) => {
       const rows = sortPlayers(squadOf(t)).map((p) => {
         const s = S.player(t.id, p.id);
-        return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' ? 'em' : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
+        return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' ? 'em' : ''}${k === 'pm' ? (s.pm > 0 ? ' pm-plus' : s.pm < 0 ? ' pm-minus' : '') : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
       }).join('');
       const T = S.team(t.id);
       return `
@@ -805,7 +832,7 @@
         rows.push({
           team: teamName(t), opponent: teamName(otherTeam(t.id)), num: p.num, last: p.last, first: p.first || '',
           pts: st.pts, p1m: st.p1m, p1a: st.p1a, p2m: st.p2m, p2a: st.p2a, p3m: st.p3m, p3a: st.p3a,
-          oreb: st.oreb, dreb: st.dreb, reb: st.reb, ast: st.ast, stl: st.stl, tov: st.tov, blk: st.blk, pf: st.pf, fd: st.fd, eval: st.eval,
+          oreb: st.oreb, dreb: st.dreb, reb: st.reb, ast: st.ast, stl: st.stl, tov: st.tov, blk: st.blk, pf: st.pf, fd: st.fd, eval: st.eval, pm: st.pm,
         });
       }
     }
@@ -817,7 +844,7 @@
       replay: {
         v: 1, created: state.created, finished: !!state.finished, quarter: state.quarter,
         teams: state.teams.map((t) => ({ id: t.id, lks: !!t.lks, name: t.name, color: t.color, tracked: t.tracked, players: t.players, squad: t.squad })),
-        events: state.events.map((e) => [e.t, e.p, e.a, e.q, e.ts]),
+        events: state.events.map((e) => [e.t, e.p, e.a, e.q, e.ts, e.on || null]),
       },
     };
   }
@@ -1119,6 +1146,7 @@
         <div class="menu-list">
           <button class="menu-item" data-act="finish">🏁 Zakończ mecz i pokaż tabelę</button>
           <button class="menu-item" data-act="toggle-hints">💡 Podpowiedzi asyst i zbiórek: <b>${state.hints ? 'wł.' : 'wył.'}</b></button>
+          <button class="menu-item" data-act="toggle-theme">${theme === 'light' ? '🌙 Motyw: <b>jasny</b> — przełącz na ciemny' : '☀️ Motyw: <b>ciemny</b> — przełącz na jasny'}</button>
           <button class="menu-item" data-act="cloud-settings">☁️ Arkusz Google: <b>${cloudReady() ? 'połączony' : 'skonfiguruj'}</b></button>
           <button class="menu-item" data-act="same-rosters">🔁 Nowy mecz — te same drużyny i składy</button>
           <button class="menu-item danger" data-act="reset">🗑️ Nowy mecz od zera</button>
@@ -1287,6 +1315,13 @@
         if (cloudReady()) saveToCloud();
         break;
       case 'cloud-save': saveToCloud(); break;
+      case 'toggle-theme': {
+        theme = theme === 'light' ? 'dark' : 'light';
+        try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* brak */ }
+        applyTheme();
+        if (app.classList.contains('scr-home')) showHome(); else renderSheet();
+        break;
+      }
       case 'cloud-settings': openSheet({ kind: 'cloud' }); break;
       case 'cloud-test':
       case 'cloud-store': {

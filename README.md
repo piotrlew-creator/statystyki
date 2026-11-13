@@ -30,7 +30,12 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
    - **Rywal bez statystyk:** pasek na dole ekranu: +1 / +2 / +3, „ZB atak” (zbiórki rywala na atakowanej desce — w tabeli i PDF obok zbiórek w obronie ŁKS) i „Faul” (licznik fauli zespołowych).
    - **Poprawianie:** w „Akcje” dotknij akcji, aby zmienić zawodnika, rodzaj akcji lub kwartę.
    - Każda akcja daje krótki „błysk” na kafelku zawodnika — widać kątem oka, że się zapisała.
+   - **Jasny motyw:** przełącznik w Menu i na ekranie startowym (zapamiętywany na tym urządzeniu) — przydatny w bardzo jasnej hali.
 5. **Tabela** — statystyki wszystkich zawodników, eksport do PDF i udostępnianie (np. WhatsApp, e-mail).
+
+## +/− (plus/minus)
+
+Różnica punktów (zdobyte − stracone przez drużynę), gdy zawodnik był na boisku. Aplikacja zapisuje skład na boisku przy każdej akcji, więc nie wymaga to żadnych dodatkowych dotknięć.
 
 ## EVAL
 
