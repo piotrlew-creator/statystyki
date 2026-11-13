@@ -23,6 +23,13 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
    - Zmiany zawodników: przycisk **⇄ Zmiany** przy drużynie.
    - Kwarta: dotknij przycisku kwarty na środku tablicy wyników.
    - **Cofnij** usuwa ostatnią akcję. W **Akcje** możesz usunąć dowolną akcję z listy.
+   - **Rzuty wolne:** po rzucie za 1 w pasku pojawia się „Kolejny wolny?” z przyciskami ✓ / ✕ — kolejny wolny to 1 dotknięcie.
+   - **And-one:** po celnym rzucie za 2/3 przycisk „+ faul” zapisuje faul wymuszony i od razu pyta o rzut wolny (i faulującego, gdy prowadzisz obie drużyny).
+   - **Szybka zmiana:** przytrzymaj kafelek zawodnika (pół sekundy) i dotknij wchodzącego z ławki.
+   - **5. faul:** aplikacja sama otwiera okno zmiany dla tego zawodnika.
+   - **Drużyna bez statystyk:** duże przyciski +1 / +2 / +3 i „Faul” (licznik fauli zespołowych).
+   - **Poprawianie:** w „Akcje” dotknij akcji, aby zmienić zawodnika, rodzaj akcji lub kwartę.
+   - Każda akcja daje krótki „błysk” na kafelku zawodnika — widać kątem oka, że się zapisała.
 5. **Tabela** — statystyki wszystkich zawodników, eksport do PDF i udostępnianie (np. WhatsApp, e-mail).
 
 ## EVAL
