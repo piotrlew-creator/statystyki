@@ -1,6 +1,6 @@
 // Service worker: aplikacja działa także bez internetu (np. na hali bez zasięgu).
 // Przy każdej zmianie plików podbij numer wersji, żeby telefony pobrały nowe pliki.
-const VERSION = 'statystyki-v13';
+const VERSION = 'statystyki-v15';
 const FILES = [
   './',
   'index.html',

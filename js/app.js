@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '13'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '15'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -63,10 +63,10 @@
   const FLASH_BAD = ['p1x', 'p2x', 'p3x', 'l1v1', 'brot'];
   const EDIT_ACTIONS = ['p1m', 'p1x', 'p2m', 'p2x', 'p3m', 'p3x', 'oreb', 'dreb', 'ast', 'stl', 'tov', 'blk', 'pf', 'fd', 'l1v1', 'gdef', 'ghelp', 'brot'];
   // Ocena gry w obronie (wpływa tylko na EVAL końcowy)
-  const DEF_ACTIONS = [['l1v1', 'Przegrany 1×1', 'neg'], ['gdef', 'Dobra obrona', 'pos'], ['ghelp', 'Dobra pomoc', 'pos'], ['brot', 'Zła rotacja', 'neg']];
+  const DEF_ACTIONS = [['gdef', 'Dobra obrona', 'pos'], ['ghelp', 'Dobra pomoc', 'pos'], ['l1v1', 'Przegrany 1×1', 'neg'], ['brot', 'Zła rotacja', 'neg']];
   const OTHER_ACTIONS = [
     ['oreb', 'ZB atak', 'reb'], ['dreb', 'ZB obrona', 'reb'], ['ast', 'Asysta', 'pos'], ['stl', 'Przechwyt', 'pos'],
-    ['tov', 'Strata', 'neg'], ['blk', 'Blok', 'pos'], ['pf', 'Faul', 'neg'], ['fd', 'Faul wym.', 'neu'],
+    ['blk', 'Blok', 'pos'], ['tov', 'Strata', 'neg'], ['pf', 'Faul', 'neg'], ['fd', 'Faul wym.', 'neu'],
   ];
 
   const app = document.getElementById('app');
@@ -770,7 +770,8 @@
   const fmtPm = (v) => (v === null || v === undefined ? '' : v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
   // rzuty: celne/wykonane i skuteczność w nawiasie, np. 8/10 (80%); bez rzutów samo 0/0
   const shot = (m, a) => (a ? `${m}/${a} (${Math.round((100 * m) / a)}%)` : `${m}/${a}`);
-  const cell = (s, k) => (k === 's1' ? shot(s.p1m, s.p1a) : k === 's2' ? shot(s.p2m, s.p2a) : k === 's3' ? shot(s.p3m, s.p3a) : k === 'pm' ? fmtPm(s.pm) : s[k]);
+  const num = (v) => (typeof v === 'number' && v < 0 ? '−' + Math.abs(v) : v); // ujemne z typograficznym minusem
+  const cell = (s, k) => (k === 's1' ? shot(s.p1m, s.p1a) : k === 's2' ? shot(s.p2m, s.p2a) : k === 's3' ? shot(s.p3m, s.p3a) : k === 'pm' ? fmtPm(s.pm) : num(s[k]));
   const pct = (m, a) => (a ? Math.round((100 * m) / a) + '%' : '–');
   const LEGEND = 'c/w (%) – celne/wykonane i skuteczność · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty · P1×1 – przegrane pojedynki 1×1 · DO – dobra obrona · DP – dobra pomoc · ZR – zła rotacja · EVAL K (końcowy) = EVAL − P1×1 + DO + DP − ZR';
 
