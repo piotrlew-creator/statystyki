@@ -644,7 +644,128 @@ button.tb-head:active { background: var(--surface); }
 :root[data-theme="light"] .tg::after { box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 :root[data-theme="light"] .tile.empty { border-color: var(--surface3); }
 /* obramowanie przycisków rywala widoczne niezależnie od koloru strojów (np. biały na jasnym, czarny na ciemnym) */
-.opp-b:not(.foul):not(.reb) { box-shadow: inset 0 0 0 2px var(--tc), 0 0 0 1px var(--surface3); }
+.opp-b.pts { box-shadow: inset 0 0 0 2px var(--tc), 0 0 0 1px var(--surface3); }
 .opp-bar { box-shadow: 0 -1px 0 var(--surface3); }
-:root[data-theme="light"] .opp-b:not(.foul):not(.reb) { box-shadow: inset 0 0 0 2px var(--tc), 0 0 0 1px #9aa6b4; }
+:root[data-theme="light"] .opp-b.pts { box-shadow: inset 0 0 0 2px var(--tc), 0 0 0 1px #9aa6b4; }
 :root[data-theme="light"] .tile.empty { box-shadow: none; background: transparent; }
+
+/* =====================================================================
+   v10: pasek rywala (7 przycisków) i ocena obrony ŁKS
+   ===================================================================== */
+/* pasek rywala: na telefonie 2 rzędy po 4 (podpis + punkty / niecelny, zbiórka, strata, faul) */
+.opp-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: stretch; }
+.opp-bar .opp-label { max-width: none; }
+.opp-b { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
+.opp-b.miss { background: var(--surface2); color: #ffb4b4; box-shadow: inset 0 0 0 1px #5b3036; }
+.opp-b.miss b { font-size: 17px; }
+.opp-b.miss small { font-size: 10.5px; font-weight: 700; }
+.opp-b.tov { background: #3a1d22; color: #ffd0d0; box-shadow: inset 0 0 0 1px #5b3036; font-size: 15px; }
+.opp-b.foul { background: #3a2a12; color: #ffd9a0; box-shadow: inset 0 0 0 1px #6b4a1a; font-size: 15px; }
+@media (min-width: 560px) {
+  .opp-bar { grid-template-columns: minmax(84px, auto) repeat(7, minmax(0, 1fr)); }
+}
+.ctx-btn.oreb { background: #1d3049; color: #cfe0ff; box-shadow: inset 0 0 0 1px #2c4a70; }
+
+/* ocena obrony: obrysowane przyciski (inne niż statystyki) */
+.defs-h { text-align: center; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 1px; }
+.defs-h span { font-weight: 600; letter-spacing: 0; text-transform: none; }
+.defs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.a.o.d { min-height: 46px; font-size: 13.5px; line-height: 1.12; padding: 2px 4px; background: transparent; }
+.a.o.d.pos { color: #9de3c4; box-shadow: inset 0 0 0 2px #2f7a62; }
+.a.o.d.neg { color: #ffb4b4; box-shadow: inset 0 0 0 2px #7a3a42; }
+.a.o.d:active { background: var(--surface2); }
+
+/* telefony: trochę ciaśniej, żeby całość mieściła się bez przewijania */
+@media (max-width: 599px) {
+  .tile { min-height: 62px; }
+  .t-num { font-size: 24px; }
+  .ctx { min-height: 44px; }
+  .a { min-height: 44px; }
+  .a.made { min-height: 50px; }
+  .a b { font-size: 20px; }
+  .others { gap: 6px; grid-auto-rows: minmax(44px, 1fr); }
+  .shots { gap: 6px; }
+  .shot-col { gap: 5px; }
+  .pad { gap: 6px; }
+  .defs { gap: 6px; }
+  .a.o.d { min-height: 42px; font-size: 12.5px; }
+  .opp-b { min-height: 42px; }
+  .opp-bar { gap: 5px; padding-top: 5px; padding-bottom: 5px; }
+  .bnav button { min-height: 46px; }
+}
+
+/* tablet */
+@media (min-width: 600px) and (min-height: 600px) {
+  .a.o.d { min-height: 60px; font-size: 16px; }
+  .defs { gap: 12px; }
+  .defs-h { font-size: 13px; }
+  .opp-b.miss b { font-size: 22px; }
+  .opp-b.miss small { font-size: 12px; }
+  .opp-b.tov, .opp-b.foul { font-size: 18px; }
+}
+
+/* małe telefony */
+@media (max-width: 599px) and (max-height: 700px) {
+  .score { padding-top: calc(3px + var(--safe-t)); padding-bottom: 3px; }
+  .sc-pts { font-size: 30px; margin: 0; }
+  .sc-q { height: 38px; }
+  .tile { min-height: 54px; }
+  .t-num { font-size: 21px; }
+  .ctx { min-height: 42px; }
+  .a, .a.made { min-height: 38px; }
+  .a.made { min-height: 40px; }
+  .a b { font-size: 18px; }
+  .a small { font-size: 10px; }
+  .shot-h, .defs-h { font-size: 9.5px; }
+  .others { grid-auto-rows: minmax(38px, 1fr); }
+  .a.o { font-size: 13px; }
+  .a.o.d { min-height: 36px; font-size: 11.5px; }
+  .opp-b { min-height: 38px; font-size: 16px; }
+  .opp-bar { padding-top: 4px; padding-bottom: 4px; }
+  .bnav button { min-height: 40px; flex-direction: row; gap: 6px; }
+  .bnav button span { font-size: 17px; }
+}
+@media (max-width: 599px) and (max-height: 600px) {
+  .tile { min-height: 50px; }
+  .t-stat { font-size: 9px; }
+  button.tb-head, .tb-head.static { min-height: 36px; }
+  .ctx { min-height: 40px; margin: 2px 8px; }
+  .a, .a.made, .a.o.d { min-height: 36px; }
+  .others { grid-auto-rows: minmax(36px, 1fr); gap: 5px; }
+  .pad { gap: 4px; padding-top: 1px; padding-bottom: 3px; }
+  .defs { gap: 5px; }
+  .opp-b { min-height: 36px; }
+  .bnav button { min-height: 38px; }
+}
+
+/* telefon obrócony poziomo — bez nagłówków nad przyciskami */
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 520px) {
+  .shot-h, .defs-h { display: none; }
+  .a.o.d { min-height: 36px; font-size: 12px; }
+  .opp-b { min-height: 36px; font-size: 15px; }
+  .opp-b.miss small { display: none; }
+}
+
+/* jasny motyw dla nowych przycisków */
+:root[data-theme="light"] .opp-b.miss { background: #ffffff; color: #b42318; box-shadow: inset 0 0 0 2px #f0b3b3; }
+:root[data-theme="light"] .opp-b.tov { background: #fbe1e1; color: #5c1515; box-shadow: inset 0 0 0 1px #e9afaf; }
+:root[data-theme="light"] .opp-b.foul { background: #fff0d6; color: #6b4100; box-shadow: inset 0 0 0 1px #e8c88f; }
+:root[data-theme="light"] .ctx-btn.oreb { background: #dbe7fa; color: #0f2d57; box-shadow: inset 0 0 0 1px #9dbbe8; }
+:root[data-theme="light"] .a.o.d { background: #ffffff; }
+:root[data-theme="light"] .a.o.d.pos { color: #0b5a3b; box-shadow: inset 0 0 0 2px #6cc39c; }
+:root[data-theme="light"] .a.o.d.neg { color: #9b1c1c; box-shadow: inset 0 0 0 2px #e39b9b; }
+:root[data-theme="light"] .a.o.d:active { background: var(--surface2); }
+.stats td.evalf { background: var(--surface2); }
+/* dopasowanie v10 */
+@media (max-width: 599px) and (max-height: 600px) {
+  .shot-h { display: none; }          /* +1/+2/+3 na przyciskach wystarczy */
+  .sc-pts { font-size: 26px; }
+  .score { padding-top: calc(2px + var(--safe-t)); padding-bottom: 2px; }
+}
+@media (min-width: 600px) and (min-height: 600px) {
+  .tile { min-height: 90px; }
+  .a.o.d { min-height: 52px; }
+}
+@media (orientation: landscape) and (min-width: 560px) and (max-height: 520px) {
+  .ctx-btn { height: 36px; }
+}

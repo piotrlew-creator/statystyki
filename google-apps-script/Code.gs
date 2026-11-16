@@ -19,13 +19,13 @@ const LKS_NAME = 'ŁKS U15';
 const SHEETS = {
   mecze: {
     name: 'Mecze',
-    head: ['ID meczu', 'Data', 'Gospodarze', 'Goście', 'Pkt gosp.', 'Pkt gości', 'ŁKS jako', 'Wynik ŁKS', 'Kwarty', 'Status', 'Zapisano', 'ZA rywala', 'Faule rywala'],
+    head: ['ID meczu', 'Data', 'Gospodarze', 'Goście', 'Pkt gosp.', 'Pkt gości', 'ŁKS jako', 'Wynik ŁKS', 'Kwarty', 'Status', 'Zapisano', 'ZA rywala', 'Faule rywala', 'Straty rywala', 'Niecelne rywala'],
   },
   stat: {
     name: 'Statystyki',
     head: ['ID meczu', 'Data', 'Rywal', 'Drużyna', 'Nr', 'Nazwisko', 'Imię', 'PKT',
       '1 pkt celne', '1 pkt wyk.', '2 pkt celne', '2 pkt wyk.', '3 pkt celne', '3 pkt wyk.',
-      'ZA', 'ZO', 'ZB', 'AS', 'PRZ', 'STR', 'BL', 'FP', 'FW', 'EVAL', '+/−'],
+      'ZA', 'ZO', 'ZB', 'AS', 'PRZ', 'STR', 'BL', 'FP', 'FW', 'EVAL', '+/−', 'P1×1', 'DO', 'DP', 'ZR', 'EVAL K'],
   },
   przebieg: {
     name: 'Przebieg',
@@ -71,6 +71,7 @@ function saveMatch(m) {
     m.id, date, m.home, m.away, m.scoreHome, m.scoreAway, m.lksSide || '', m.lksResult || '',
     m.quarters, m.finished ? 'zakończony' : 'w trakcie', new Date(),
     m.oppOreb === undefined ? '' : m.oppOreb, m.oppFouls === undefined ? '' : m.oppFouls,
+    m.oppTov === undefined ? '' : m.oppTov, m.oppMiss === undefined ? '' : m.oppMiss,
   ]);
 
   // Statystyki
@@ -80,6 +81,8 @@ function saveMatch(m) {
     m.id, date, r.opponent, r.team, r.num, r.last, r.first || '', r.pts,
     r.p1m, r.p1a, r.p2m, r.p2a, r.p3m, r.p3a,
     r.oreb, r.dreb, r.reb, r.ast, r.stl, r.tov, r.blk, r.pf, r.fd, r.eval, r.pm === undefined ? '' : r.pm,
+    r.l1v1 === undefined ? '' : r.l1v1, r.gdef === undefined ? '' : r.gdef, r.ghelp === undefined ? '' : r.ghelp,
+    r.brot === undefined ? '' : r.brot, r.evalf === undefined ? '' : r.evalf,
   ]);
   if (rows.length) shS.getRange(shS.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 

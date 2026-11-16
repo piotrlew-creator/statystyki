@@ -27,11 +27,20 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
    - **And-one:** po celnym rzucie za 2/3 przycisk „+ faul” zapisuje faul wymuszony i od razu pyta o rzut wolny (i faulującego, gdy prowadzisz obie drużyny).
    - **Szybka zmiana:** przytrzymaj kafelek zawodnika (pół sekundy) i dotknij wchodzącego z ławki.
    - **5. faul:** aplikacja sama otwiera okno zmiany dla tego zawodnika.
-   - **Rywal bez statystyk:** pasek na dole ekranu: +1 / +2 / +3, „ZB atak” (zbiórki rywala na atakowanej desce — w tabeli i PDF obok zbiórek w obronie ŁKS) i „Faul” (licznik fauli zespołowych).
+   - **Rywal bez statystyk:** pasek na dole ekranu: +1 / +2 / +3, „✕ niecelny”, „ZB atak”, „Strata” i „Faul”.
+     Po niecelnym rzucie rywala dotknij zbierającego z ŁKS (= zbiórka w obronie) albo „ZB rywala”; po faulu rywala dotknij zawodnika ŁKS, który go wymusił.
+     Automatycznie liczą się też: faul wymuszony ŁKS → faul rywala, przechwyt ŁKS → strata rywala, blok ŁKS → niecelny rzut rywala.
+   - **Ocena obrony ŁKS:** „Przegrany 1×1”, „Dobra obrona”, „Dobra pomoc”, „Zła rotacja” — wpływają tylko na EVAL końcowy.
    - **Poprawianie:** w „Akcje” dotknij akcji, aby zmienić zawodnika, rodzaj akcji lub kwartę.
    - Każda akcja daje krótki „błysk” na kafelku zawodnika — widać kątem oka, że się zapisała.
    - **Jasny motyw:** przełącznik w Menu i na ekranie startowym (zapamiętywany na tym urządzeniu) — przydatny w bardzo jasnej hali.
 5. **Tabela** — statystyki wszystkich zawodników, eksport do PDF i udostępnianie (np. WhatsApp, e-mail).
+
+## EVAL końcowy (EVAL K)
+
+`EVAL K = EVAL − przegrane pojedynki 1×1 + dobra obrona + dobra pomoc − złe rotacje`
+
+W tabeli i PDF za kolumną EVAL: P1×1, DO, DP, ZR, EVAL K.
 
 ## +/− (plus/minus)
 

@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '9'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '10'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -50,10 +50,20 @@
     opp3: { label: '+3 pkt (drużyna)', short: '+3' },
     oppf: { label: 'Faul (drużyna)', short: 'F' },
     oppreb: { label: 'Zbiórka w ataku (drużyna)', short: 'ZA' },
+    opptov: { label: 'Strata (drużyna)', short: 'STR' },
+    oppmiss: { label: 'Niecelny rzut (drużyna)', short: '✕' },
+    l1v1: { label: 'Przegrany pojedynek 1×1', short: 'P1×1' },
+    gdef: { label: 'Dobra obrona', short: 'DO' },
+    ghelp: { label: 'Dobra pomoc', short: 'DP' },
+    brot: { label: 'Zła rotacja', short: 'ZR' },
   };
   // Krótki napis „błysku” na kafelku po zapisaniu akcji
-  const FLASH = { p1m: '+1', p2m: '+2', p3m: '+3', p1x: '✕', p2x: '✕', p3x: '✕', oreb: 'ZB', dreb: 'ZB', ast: 'AS', stl: 'PRZ', tov: 'STR', blk: 'BL', pf: 'F', fd: 'FW' };
-  const EDIT_ACTIONS = ['p1m', 'p1x', 'p2m', 'p2x', 'p3m', 'p3x', 'oreb', 'dreb', 'ast', 'stl', 'tov', 'blk', 'pf', 'fd'];
+  const FLASH = { p1m: '+1', p2m: '+2', p3m: '+3', p1x: '✕', p2x: '✕', p3x: '✕', oreb: 'ZB', dreb: 'ZB', ast: 'AS', stl: 'PRZ', tov: 'STR', blk: 'BL', pf: 'F', fd: 'FW', l1v1: '1×1', gdef: 'DO', ghelp: 'DP', brot: 'ZR' };
+  const FLASH_GOOD = ['p1m', 'p2m', 'p3m', 'gdef', 'ghelp'];
+  const FLASH_BAD = ['p1x', 'p2x', 'p3x', 'l1v1', 'brot'];
+  const EDIT_ACTIONS = ['p1m', 'p1x', 'p2m', 'p2x', 'p3m', 'p3x', 'oreb', 'dreb', 'ast', 'stl', 'tov', 'blk', 'pf', 'fd', 'l1v1', 'gdef', 'ghelp', 'brot'];
+  // Ocena gry w obronie (wpływa tylko na EVAL końcowy)
+  const DEF_ACTIONS = [['l1v1', 'Przegrany 1×1', 'neg'], ['gdef', 'Dobra obrona', 'pos'], ['ghelp', 'Dobra pomoc', 'pos'], ['brot', 'Zła rotacja', 'neg']];
   const OTHER_ACTIONS = [
     ['oreb', 'ZB atak', 'reb'], ['dreb', 'ZB obrona', 'reb'], ['ast', 'Asysta', 'pos'], ['stl', 'Przechwyt', 'pos'],
     ['tov', 'Strata', 'neg'], ['blk', 'Blok', 'pos'], ['pf', 'Faul', 'neg'], ['fd', 'Faul wym.', 'neu'],
@@ -159,7 +169,7 @@
   }
 
   // ---------- statystyki ----------
-  const emptyStats = () => ({ p1m: 0, p1x: 0, p2m: 0, p2x: 0, p3m: 0, p3x: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, tov: 0, blk: 0, pf: 0, fd: 0 });
+  const emptyStats = () => ({ p1m: 0, p1x: 0, p2m: 0, p2x: 0, p3m: 0, p3x: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, tov: 0, blk: 0, pf: 0, fd: 0, l1v1: 0, gdef: 0, ghelp: 0, brot: 0 });
 
   function derive(s) {
     const pts = s.p1m + 2 * s.p2m + 3 * s.p3m;
@@ -167,7 +177,9 @@
     const reb = s.oreb + s.dreb;
     // EVAL = punkty − wszystkie niecelne rzuty + asysty + przechwyty + zbiórki (A+O) + bloki − straty
     const ev = pts - missed + s.ast + s.stl + s.oreb + s.dreb + s.blk - s.tov;
-    return { ...s, pts, missed, reb, eval: ev, p1a: s.p1m + s.p1x, p2a: s.p2m + s.p2x, p3a: s.p3m + s.p3x };
+    // EVAL końcowy = EVAL − przegrane 1×1 + dobra obrona + dobra pomoc − złe rotacje
+    const evf = ev - s.l1v1 + s.gdef + s.ghelp - s.brot;
+    return { ...s, pts, missed, reb, eval: ev, evalf: evf, p1a: s.p1m + s.p1x, p2a: s.p2m + s.p2x, p3a: s.p3m + s.p3x };
   }
 
   function computeAll() {
@@ -177,6 +189,8 @@
     const qFouls = { A: {}, B: {} };
     const extra = { A: 0, B: 0 }; // punkty drużyny bez zawodnika (nieśledzona drużyna)
     const oppReb = { A: 0, B: 0 }, oppFouls = { A: 0, B: 0 }; // zbiórki w ataku i faule drużyny bez statystyk
+    const oppTov = { A: 0, B: 0 }, oppMiss = { A: 0, B: 0 }; // straty i niecelne rzuty drużyny bez statystyk
+    const rival = { A: teamById('B'), B: teamById('A') };
     const pm = new Map(); // +/−: różnica punktów, gdy zawodnik był na boisku
     for (const e of state.events) {
       const evPts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
@@ -187,6 +201,8 @@
         }
       }
       if (e.a === 'oppreb') { oppReb[e.t]++; continue; }
+      if (e.a === 'opptov') { oppTov[e.t]++; continue; }
+      if (e.a === 'oppmiss') { oppMiss[e.t]++; continue; }
       const pts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
       if (pts) qPts[e.t][e.q] = (qPts[e.t][e.q] || 0) + pts;
       if (e.a === 'oppf') {
@@ -200,6 +216,17 @@
       if (!players.has(key)) players.set(key, emptyStats());
       players.get(key)[e.a]++;
       teamTot[e.t][e.a]++;
+      // Rywal bez statystyk zawodników: akcje ŁKS automatycznie liczą się też rywalowi
+      const rv = rival[e.t];
+      if (rv && !rv.tracked) {
+        if (e.a === 'fd' && !e.nd) { // faul wymuszony = faul rywala (chyba że zapisany z przycisku „Faul” rywala)
+          oppFouls[rv.id]++;
+          const fq = Math.min(e.q, 4);
+          qFouls[rv.id][fq] = (qFouls[rv.id][fq] || 0) + 1;
+        }
+        if (e.a === 'stl') oppTov[rv.id]++;   // przechwyt = strata rywala
+        if (e.a === 'blk') oppMiss[rv.id]++;  // blok = niecelny rzut rywala
+      }
       if (e.a === 'pf') {
         const fq = Math.min(e.q, 4); // faule w dogrywce liczą się do 4. kwarty (FIBA)
         qFouls[e.t][fq] = (qFouls[e.t][fq] || 0) + 1;
@@ -210,7 +237,7 @@
     return {
       player: (t, pid) => ({ ...derive(players.get(t + ':' + pid) || emptyStats()), pm: pm.get(t + ':' + pid) || 0 }),
       team: (t) => ({ ...derive(teamTot[t]), pm: null }),
-      score, qPts, qFouls, extra, oppReb, oppFouls,
+      score, qPts, qFouls, extra, oppReb, oppFouls, oppTov, oppMiss,
       maxQ: Math.max(4, state.quarter, ...state.events.map((e) => e.q)),
     };
   }
@@ -466,8 +493,10 @@
     const oppBars = state.teams.filter((t) => !t.tracked).map((t) => `
         <div class="opp-bar" style="${teamVars(t)}">
           <div class="opp-label"><small>Rywal</small><b><span class="dot"></span>${esc(teamName(t))}</b></div>
-          ${[1, 2, 3].map((v) => `<button class="opp-b" data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}
+          ${[1, 2, 3].map((v) => `<button class="opp-b pts" data-act="opp" data-team="${t.id}" data-v="${v}">+${v}</button>`).join('')}
+          <button class="opp-b miss" data-act="opp" data-team="${t.id}" data-v="miss" aria-label="Niecelny rzut rywala"><b>✕</b><small>niecelny</small></button>
           <button class="opp-b reb" data-act="opp" data-team="${t.id}" data-v="reb" aria-label="Zbiórka w ataku rywala"><b>ZB</b><small>atak</small></button>
+          <button class="opp-b tov" data-act="opp" data-team="${t.id}" data-v="tov">Strata</button>
           <button class="opp-b foul" data-act="opp" data-team="${t.id}" data-v="f">Faul</button>
         </div>`).join('');
     const teamBlocks = tracked().map((t) => {
@@ -516,6 +545,8 @@
       <div class="pad">
         <div class="shots">${shotCol(1)}${shotCol(2)}${shotCol(3)}</div>
         <div class="others">${others}</div>
+        <div class="defs-h">Ocena obrony <span>(EVAL końcowy)</span></div>
+        <div class="defs">${DEF_ACTIONS.map(([k, label, kind]) => `<button class="a o d ${kind} ${ui.selA === k ? 'on' : ''}" data-act="action" data-a="${k}">${label}</button>`).join('')}</div>
       </div>
       ${oppBars}
       <nav class="bnav">
@@ -546,9 +577,11 @@
         title = f.ftLabel || 'Kolejny wolny?';
         sub = f.type === 'reb' ? 'albo dotknij zbierającego' : f.type === 'pf' ? 'albo dotknij faulującego' : 'tego samego zawodnika';
       } else [title, sub] = PARTS[f.type];
+      if (f.sub) sub = f.sub;
       const left = Math.max(0, f.expires - Date.now());
       const btns = (f.ft ? '<button class="ctx-btn ft-m" data-act="ft" data-r="m" aria-label="Celny">✓</button><button class="ctx-btn ft-x" data-act="ft" data-r="x" aria-label="Niecelny">✕</button>' : '')
         + (f.andOne ? '<button class="ctx-btn and1" data-act="and-one">+ faul</button>' : '')
+        + (f.oppReb ? '<button class="ctx-btn oreb" data-act="opp-oreb">ZB rywala</button>' : '')
         + '<button class="ctx-btn" data-act="follow-skip">Pomiń</button>';
       return `<div class="ctx follow"><span class="ctx-l"><b>${title}</b><small>${sub}</small></span>
         <span class="ctx-acts">${btns}</span>
@@ -576,6 +609,7 @@
   // opts.chained — akcja z podpowiedzi (bez kolejnej podpowiedzi); opts.andOne — faul przy celnym rzucie
   function record(a, team, pid, opts = {}) {
     const ev = { id: uid(), t: team, p: pid, a, q: state.quarter, ts: Date.now(), on: lineupNow() };
+    if (opts.nd) ev.nd = 1; // faul wymuszony zapisany z przycisku „Faul” rywala — faul rywala już policzony
     state.events.push(ev);
     ui.lastId = ev.id;
     ui.msg = null;
@@ -613,7 +647,7 @@
         const el = app.querySelector(`.tile[data-team="${ev.t}"][data-pid="${ev.p}"]`);
         if (el) {
           const sp = document.createElement('span');
-          sp.className = 'flash ' + (/m$/.test(ev.a) && ev.a[0] === 'p' ? 'good' : /x$/.test(ev.a) && ev.a[0] === 'p' ? 'bad' : '');
+          sp.className = 'flash ' + (FLASH_GOOD.includes(ev.a) ? 'good' : FLASH_BAD.includes(ev.a) ? 'bad' : '');
           sp.textContent = FLASH[ev.a];
           el.appendChild(sp);
         }
@@ -625,7 +659,21 @@
   }
 
   function setFollow(ev, opts = {}) {
-    if (!state.hints || !ev.p) return;
+    if (!state.hints) return;
+    if (!ev.p) {
+      // rywal bez statystyk: po niecelnym rzucie — kto zebrał; po faulu — kto z ŁKS wymusił
+      const o = otherTeam(ev.t);
+      if (!o.tracked) return;
+      const elig = o.onCourt.map((id) => o.id + ':' + id);
+      if (!elig.length) return;
+      let f = null;
+      if (ev.a === 'oppmiss') f = { type: 'reb', oppReb: ev.t, sub: 'dotknij zbierającego z ' + teamName(o) };
+      else if (ev.a === 'oppf') f = { type: 'fd', nd: true, sub: 'dotknij zawodnika ' + teamName(o) };
+      if (!f) return;
+      ui.follow = { ...f, elig: new Set(elig), src: ev.t, ms: HINT_MS, expires: Date.now() + HINT_MS };
+      followTimer = setTimeout(() => { ui.follow = null; if (state.screen === 'live' && onLive() && !ui.sheet) render(); }, HINT_MS);
+      return;
+    }
     const t = teamById(ev.t), o = otherTeam(ev.t);
     const keys = (team, exclude) => team.onCourt.filter((id) => id !== exclude).map((id) => team.id + ':' + id);
     const shooter = { team: ev.t, pid: ev.p };
@@ -655,7 +703,7 @@
     const key = team + ':' + pid;
     if (f && f.elig.has(key)) {
       const a = f.type === 'reb' ? (team === f.src ? 'oreb' : 'dreb') : f.type;
-      record(a, team, pid, { chained: true });
+      record(a, team, pid, { chained: true, nd: f.nd });
       // and-one: po wskazaniu faulującego nadal czekamy na wynik rzutu wolnego
       if (f.ft && f.type === 'pf' && !ui.sheet && state.hints) {
         ui.follow = { type: null, elig: new Set(), src: f.src, ft: f.ft, ftLabel: f.ftLabel, ms: FT_MS, expires: Date.now() + FT_MS };
@@ -718,17 +766,18 @@
   const COLS = [
     ['pts', 'PKT'], ['s1', '1 PKT'], ['s2', '2 PKT'], ['s3', '3 PKT'], ['oreb', 'ZA'], ['dreb', 'ZO'], ['reb', 'ZB'],
     ['ast', 'AS'], ['stl', 'PRZ'], ['tov', 'STR'], ['blk', 'BL'], ['pf', 'FP'], ['fd', 'FW'], ['pm', '+/−'], ['eval', 'EVAL'],
+    ['l1v1', 'P1×1'], ['gdef', 'DO'], ['ghelp', 'DP'], ['brot', 'ZR'], ['evalf', 'EVAL K'],
   ];
   const fmtPm = (v) => (v === null || v === undefined ? '' : v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
   const cell = (s, k) => (k === 's1' ? `${s.p1m}/${s.p1a}` : k === 's2' ? `${s.p2m}/${s.p2a}` : k === 's3' ? `${s.p3m}/${s.p3a}` : k === 'pm' ? fmtPm(s.pm) : s[k]);
   const pct = (m, a) => (a ? Math.round((100 * m) / a) + '%' : '–');
-  const LEGEND = 'c/w – celne/wykonane · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty';
+  const LEGEND = 'c/w – celne/wykonane · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty · P1×1 – przegrane pojedynki 1×1 · DO – dobra obrona · DP – dobra pomoc · ZR – zła rotacja · EVAL K (końcowy) = EVAL − P1×1 + DO + DP − ZR';
 
   // Drużyna bez statystyk zawodników: zbiórki w ataku i faule (porównanie ze zbiórkami w obronie ŁKS)
   function oppSummaries(S) {
     return state.teams.filter((t) => !t.tracked).map((t) => {
       const o = otherTeam(t.id);
-      return { t, pts: S.score[t.id], oreb: S.oppReb[t.id], fouls: S.oppFouls[t.id], ourDreb: o.tracked ? S.team(o.id).dreb : null, ourName: teamName(o) };
+      return { t, pts: S.score[t.id], oreb: S.oppReb[t.id], fouls: S.oppFouls[t.id], tov: S.oppTov[t.id], miss: S.oppMiss[t.id], ourDreb: o.tracked ? S.team(o.id).dreb : null, ourName: teamName(o) };
     });
   }
 
@@ -747,7 +796,7 @@
     const tables = tracked().map((t) => {
       const rows = sortPlayers(squadOf(t)).map((p) => {
         const s = S.player(t.id, p.id);
-        return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' ? 'em' : ''}${k === 'pm' ? (s.pm > 0 ? ' pm-plus' : s.pm < 0 ? ' pm-minus' : '') : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
+        return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' || k === 'evalf' ? 'em' : ''}${k === 'evalf' ? ' evalf' : ''}${k === 'pm' ? (s.pm > 0 ? ' pm-plus' : s.pm < 0 ? ' pm-minus' : '') : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
       }).join('');
       const T = S.team(t.id);
       return `
@@ -780,8 +829,11 @@
             <div class="opp-sum-row">
               <div><b>${x.oreb}</b><span>zbiórki w ataku rywala</span></div>
               ${x.ourDreb !== null ? `<div><b>${x.ourDreb}</b><span>zbiórki w obronie ${esc(x.ourName)}</span></div>` : ''}
+              <div><b>${x.tov}</b><span>straty rywala</span></div>
+              <div><b>${x.miss}</b><span>niecelne rzuty rywala</span></div>
               <div><b>${x.fouls}</b><span>faule rywala</span></div>
             </div>
+            <p class="muted small opp-note">Straty rywala obejmują przechwyty ${esc(x.ourName)}, niecelne rzuty — bloki ${esc(x.ourName)}, a faule — faule wymuszone przez ${esc(x.ourName)}.</p>
           </div>`).join('')}
         ${tables}
         <p class="legend muted small">${LEGEND}</p>
@@ -833,6 +885,7 @@
           team: teamName(t), opponent: teamName(otherTeam(t.id)), num: p.num, last: p.last, first: p.first || '',
           pts: st.pts, p1m: st.p1m, p1a: st.p1a, p2m: st.p2m, p2a: st.p2a, p3m: st.p3m, p3a: st.p3a,
           oreb: st.oreb, dreb: st.dreb, reb: st.reb, ast: st.ast, stl: st.stl, tov: st.tov, blk: st.blk, pf: st.pf, fd: st.fd, eval: st.eval, pm: st.pm,
+          l1v1: st.l1v1, gdef: st.gdef, ghelp: st.ghelp, brot: st.brot, evalf: st.evalf,
         });
       }
     }
@@ -841,10 +894,11 @@
       home: teamName(ta), away: teamName(tb), scoreHome: S.score.A, scoreAway: S.score.B,
       lksSide: lks ? (lks.id === 'A' ? 'gospodarz' : 'gość') : '', lksResult, quarters, rows,
       oppOreb: oppSummaries(S).length ? oppSummaries(S)[0].oreb : '', oppFouls: oppSummaries(S).length ? oppSummaries(S)[0].fouls : '',
+      oppTov: oppSummaries(S).length ? oppSummaries(S)[0].tov : '', oppMiss: oppSummaries(S).length ? oppSummaries(S)[0].miss : '',
       replay: {
         v: 1, created: state.created, finished: !!state.finished, quarter: state.quarter,
         teams: state.teams.map((t) => ({ id: t.id, lks: !!t.lks, name: t.name, color: t.color, tracked: t.tracked, players: t.players, squad: t.squad })),
-        events: state.events.map((e) => [e.t, e.p, e.a, e.q, e.ts, e.on || null]),
+        events: state.events.map((e) => [e.t, e.p, e.a, e.q, e.ts, e.on || null, e.nd || 0]),
       },
     };
   }
@@ -962,7 +1016,7 @@
           { text: teamName(x.t) + ' (rywal, bez statystyk zawodników): ', bold: true },
           `zbiórki w ataku: ${x.oreb}`,
           x.ourDreb !== null ? `  ·  zbiórki w obronie ${x.ourName}: ${x.ourDreb}` : '',
-          `  ·  faule: ${x.fouls}`,
+          `  ·  straty: ${x.tov}  ·  niecelne rzuty: ${x.miss}  ·  faule: ${x.fouls}`,
         ],
         style: 'meta', alignment: 'center', margin: [0, -6, 0, 12],
       });
@@ -977,7 +1031,7 @@
         body.push([
           { text: p.num, alignment: 'center' },
           { text: [{ text: p.last, bold: true }, p.first ? ' ' + p.first : ''] },
-          ...COLS.map(([k]) => ({ text: String(cell(s, k)), alignment: 'center', bold: k === 'pts' || k === 'eval' })),
+          ...COLS.map(([k]) => ({ text: String(cell(s, k)), alignment: 'center', bold: k === 'pts' || k === 'eval' || k === 'evalf' })),
         ]);
       }
       body.push([{ text: '' }, { text: 'Razem', bold: true }, ...COLS.map(([k]) => ({ text: String(cell(T, k)), alignment: 'center', bold: true }))]);
@@ -989,7 +1043,7 @@
           ], columnGap: 6, margin: [0, 6, 0, 4],
         },
         {
-          table: { headerRows: 1, widths: [22, '*', ...COLS.map(([k]) => (k.startsWith('s') ? 40 : 32))], body },
+          table: { headerRows: 1, widths: [20, '*', ...COLS.map(([k]) => (/^s\d$/.test(k) ? 36 : k === 'eval' || k === 'evalf' ? 34 : 27))], body },
           layout: {
             ...thin,
             fillColor: (row) => (row === 0 ? '#eef1f4' : row === body.length - 1 ? '#f6f7f9' : null),
@@ -1101,7 +1155,7 @@
       if (!ev) { ui.sheet = null; return; }
       const t = teamById(ev.t);
       const isOpp = !ev.p;
-      const acts = isOpp ? ['opp1', 'opp2', 'opp3', 'oppreb', 'oppf'] : EDIT_ACTIONS;
+      const acts = isOpp ? ['opp1', 'opp2', 'opp3', 'oppmiss', 'oppreb', 'opptov', 'oppf'] : EDIT_ACTIONS;
       const pls = isOpp ? [] : sortPlayers(t.players.filter((p) => t.squad.includes(p.id) || p.id === sh.p));
       const nQ = Math.max(4, state.quarter, ...state.events.map((e) => e.q));
       inner = `
@@ -1238,7 +1292,12 @@
       }
       case 'player': tapPlayer(d.team, d.pid); break;
       case 'action': tapAction(d.a); break;
-      case 'opp': clearFollow(); ui.selP = ui.selA = null; record('opp' + d.v, d.team, null, { chained: true }); break;
+      case 'opp': clearFollow(); ui.selP = ui.selA = null; record('opp' + d.v, d.team, null); break;
+      case 'opp-oreb': {
+        const f = ui.follow; if (!f || !f.oppReb) return;
+        record('oppreb', f.oppReb, null, { chained: true });
+        break;
+      }
       case 'ft': {
         const f = ui.follow; if (!f || !f.ft) return;
         record(d.r === 'm' ? 'p1m' : 'p1x', f.ft.team, f.ft.pid);
