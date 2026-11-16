@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '10'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '11'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -527,8 +527,7 @@
 
     const shotCol = (n) => `
       <div class="shot-col">
-        <div class="shot-h">${n} PKT</div>
-        <button class="a made ${ui.selA === 'p' + n + 'm' ? 'on' : ''}" data-act="action" data-a="p${n}m"><b>+${n}</b><small>celny</small></button>
+        <button class="a made ${ui.selA === 'p' + n + 'm' ? 'on' : ''}" data-act="action" data-a="p${n}m"><b>+${n} PKT</b><small>celny</small></button>
         <button class="a miss ${ui.selA === 'p' + n + 'x' ? 'on' : ''}" data-act="action" data-a="p${n}x"><b>✕</b><small>niecelny</small></button>
       </div>`;
     const others = OTHER_ACTIONS.map(([k, label, kind]) =>
@@ -545,7 +544,7 @@
       <div class="pad">
         <div class="shots">${shotCol(1)}${shotCol(2)}${shotCol(3)}</div>
         <div class="others">${others}</div>
-        <div class="defs-h">Ocena obrony <span>(EVAL końcowy)</span></div>
+        <div class="defs-h">Ocena obrony</div>
         <div class="defs">${DEF_ACTIONS.map(([k, label, kind]) => `<button class="a o d ${kind} ${ui.selA === k ? 'on' : ''}" data-act="action" data-a="${k}">${label}</button>`).join('')}</div>
       </div>
       ${oppBars}
