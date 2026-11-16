@@ -33,8 +33,14 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
    - **Ocena obrony ŁKS:** „Przegrany 1×1”, „Dobra obrona”, „Dobra pomoc”, „Zła rotacja” — wpływają tylko na EVAL końcowy.
    - **Poprawianie:** w „Akcje” dotknij akcji, aby zmienić zawodnika, rodzaj akcji lub kwartę.
    - Każda akcja daje krótki „błysk” na kafelku zawodnika — widać kątem oka, że się zapisała.
+   - **Ostatnie akcje:** wąski pasek pod kafelkami pokazuje 4 ostatnie zapisane akcje (najnowsza po lewej); dotknięcie otwiera pełną listę.
+   - **Faule:** żółte „F” na kafelku przy kłopotach z faulami (2 w 1. kwarcie, 3 do przerwy, 4 w drugiej połowie) oraz znacznik **LIMIT** przy 4 faulach drużyny w kwarcie (kolejne = rzuty wolne).
+   - **Wibracja** po zapisaniu akcji (Android; iPhone z iOS 18 — krótki „tik”), wyłączana w Menu.
+   - **Skład i piątka z ostatniego meczu:** przyciski „↺ Skład z ostatniego meczu” i „↺ Piątka z ostatniego meczu” (zapamiętane na tym telefonie).
    - **Jasny motyw:** przełącznik w Menu i na ekranie startowym (zapamiętywany na tym urządzeniu) — przydatny w bardzo jasnej hali.
 5. **Tabela** — statystyki wszystkich zawodników, eksport do PDF i udostępnianie (np. WhatsApp, e-mail).
+   Raport: kolumny w grupach (RZUTY, ZBIÓRKI, GRA, OCENA OBRONY), kolumna Z GRY (rzuty za 2 i 3 razem), najlepszy wynik w każdej kolumnie na zielono, wyróżniona kolumna EVAL K,
+   statystyki drużyny w kwartach oraz najskuteczniejsze piątki (bilans +/− gdy dana piątka grała razem). U rywala: ile trafił za 3, za 2 i rzutów wolnych.
    Raport: najpierw ŁKS (zawodnicy jako „Nazwisko I.”, rzuty jako celne/wykonane ze skutecznością, np. 8/10 (80%)), a na końcu osobno rywal — lista punktowana.
 
 ## EVAL końcowy (EVAL K)

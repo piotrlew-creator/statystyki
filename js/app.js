@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '15'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '16'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -100,7 +100,18 @@
   const sortPlayers = (arr) => arr.slice().sort((a, b) => (parseInt(a.num, 10) - parseInt(b.num, 10)) || String(a.num).localeCompare(String(b.num)));
   const qLabel = (q) => (q <= 4 ? `${q}. kw.` : `Dogr. ${q - 4}`);
   const qShort = (q) => (q <= 4 ? String(q) : `D${q - 4}`);
-  const vibrate = (ms = 12) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* brak */ } };
+  // Wibracja po akcji: Android — navigator.vibrate; iPhone (iOS 18+) — krótki „tik” przełącznika systemowego
+  const VIBE_KEY = 'statystyki:vibe';
+  const vibeOn = () => { try { return localStorage.getItem(VIBE_KEY) !== 'off'; } catch (e) { return true; } };
+  const vibrate = (ms = 12) => {
+    if (!vibeOn()) return;
+    try {
+      if (typeof navigator.vibrate === 'function') { navigator.vibrate(ms); return; }
+      const l = document.createElement('label'); l.setAttribute('aria-hidden', 'true'); l.style.display = 'none';
+      const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); l.appendChild(i);
+      document.head.appendChild(l); l.click(); document.head.removeChild(l);
+    } catch (e) { /* brak */ }
+  };
 
   function textOn(hex) {
     const h = hex.replace('#', '');
@@ -179,7 +190,7 @@
     const ev = pts - missed + s.ast + s.stl + s.oreb + s.dreb + s.blk - s.tov;
     // EVAL końcowy = EVAL − przegrane 1×1 + dobra obrona + dobra pomoc − złe rotacje
     const evf = ev - s.l1v1 + s.gdef + s.ghelp - s.brot;
-    return { ...s, pts, missed, reb, eval: ev, evalf: evf, p1a: s.p1m + s.p1x, p2a: s.p2m + s.p2x, p3a: s.p3m + s.p3x };
+    return { ...s, pts, missed, reb, eval: ev, evalf: evf, p1a: s.p1m + s.p1x, p2a: s.p2m + s.p2x, p3a: s.p3m + s.p3x, fgm: s.p2m + s.p3m, fga: s.p2m + s.p2x + s.p3m + s.p3x };
   }
 
   function computeAll() {
@@ -192,14 +203,24 @@
     const oppTov = { A: 0, B: 0 }, oppMiss = { A: 0, B: 0 }; // straty i niecelne rzuty drużyny bez statystyk
     const rival = { A: teamById('B'), B: teamById('A') };
     const pm = new Map(); // +/−: różnica punktów, gdy zawodnik był na boisku
+    const units = { A: new Map(), B: new Map() }; // piątki: punkty zdobyte i stracone, gdy grały razem
+    const qTeam = { A: {}, B: {} }; // statystyki drużyny w poszczególnych kwartach
+    const oppMade = { A: { 1: 0, 2: 0, 3: 0 }, B: { 1: 0, 2: 0, 3: 0 } }; // trafienia drużyny bez statystyk zawodników
     for (const e of state.events) {
       const evPts = { p1m: 1, p2m: 2, p3m: 3, opp1: 1, opp2: 2, opp3: 3 }[e.a] || 0;
       if (evPts && e.on) {
         for (const tid of Object.keys(e.on)) {
           const sign = tid === e.t ? 1 : -1;
           for (const pid of e.on[tid]) { const k = tid + ':' + pid; pm.set(k, (pm.get(k) || 0) + sign * evPts); }
+          if (units[tid] && e.on[tid].length) {
+            const uk = e.on[tid].slice().sort().join(',');
+            const u = units[tid].get(uk) || { ids: uk.split(','), pf: 0, pa: 0 };
+            if (sign > 0) u.pf += evPts; else u.pa += evPts;
+            units[tid].set(uk, u);
+          }
         }
       }
+      if (/^opp[123]$/.test(e.a)) oppMade[e.t][+e.a.slice(3)]++;
       if (e.a === 'oppreb') { oppReb[e.t]++; continue; }
       if (e.a === 'opptov') { oppTov[e.t]++; continue; }
       if (e.a === 'oppmiss') { oppMiss[e.t]++; continue; }
@@ -216,6 +237,7 @@
       if (!players.has(key)) players.set(key, emptyStats());
       players.get(key)[e.a]++;
       teamTot[e.t][e.a]++;
+      (qTeam[e.t][e.q] || (qTeam[e.t][e.q] = emptyStats()))[e.a]++;
       // Rywal bez statystyk zawodników: akcje ŁKS automatycznie liczą się też rywalowi
       const rv = rival[e.t];
       if (rv && !rv.tracked) {
@@ -237,7 +259,9 @@
     return {
       player: (t, pid) => ({ ...derive(players.get(t + ':' + pid) || emptyStats()), pm: pm.get(t + ':' + pid) || 0 }),
       team: (t) => ({ ...derive(teamTot[t]), pm: null }),
-      score, qPts, qFouls, extra, oppReb, oppFouls, oppTov, oppMiss,
+      teamQ: (t, q) => derive(qTeam[t][q] || emptyStats()),
+      units: (t) => [...units[t].values()].map((u) => ({ ...u, pm: u.pf - u.pa })),
+      score, qPts, qFouls, extra, oppReb, oppFouls, oppTov, oppMiss, oppMade,
       maxQ: Math.max(4, state.quarter, ...state.events.map((e) => e.q)),
     };
   }
@@ -402,8 +426,26 @@
   }
 
   // ŁKS: wybór składu meczowego ze stałej listy
+  // Skład i pierwsza piątka ŁKS z ostatniego meczu (zapamiętane na tym telefonie)
+  const LAST_KEY = 'statystyki:last';
+  const lastLks = () => { try { const v = JSON.parse(localStorage.getItem(LAST_KEY) || 'null'); return v && Array.isArray(v.squad) ? v : null; } catch (e) { return null; } };
+  const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+  function lastSquadFor(t) {
+    const L = t.lks && lastLks();
+    if (!L) return null;
+    const ids = L.squad.filter((id) => t.players.some((p) => p.id === id));
+    return ids.length ? ids : null;
+  }
+  function lastFiveFor(t) {
+    const L = t.lks && lastLks();
+    if (!L || !Array.isArray(L.five)) return null;
+    const ids = L.five.filter((id) => t.squad.includes(id));
+    return ids.length === Math.min(5, t.squad.length) && ids.length ? ids : null;
+  }
+
   function renderSquadPicker(t, tabs) {
     const n = t.squad.length;
+    const lastSq = lastSquadFor(t);
     const chips = sortPlayers(t.players).map((p) => `
       <button class="pchip tall ${t.squad.includes(p.id) ? 'on' : ''}" data-act="squad-toggle" data-team="${t.id}" data-pid="${p.id}">
         <span class="pc-num">${esc(p.num)}</span><span class="pc-name">${esc(p.last)}</span>${p.first ? `<span class="pc-first">${esc(p.first)}</span>` : ''}
@@ -415,6 +457,7 @@
         <div class="card" style="${teamVars(t)}">
           <div class="list-head"><span><span class="dot"></span>${esc(teamName(t))}</span><span class="count ${n ? 'ok' : ''}">W składzie: ${n}</span></div>
           <p class="muted small" style="margin:0 0 10px">Dotknij zawodników, którzy grają w tym meczu.</p>
+          ${lastSq && !sameSet(lastSq, t.squad) ? `<button class="btn block last-btn" data-act="squad-last" data-team="${t.id}">↺ Skład z ostatniego meczu (${lastSq.length})</button>` : ''}
           <div class="chip-grid">${chips}</div>
           <div class="row2">
             <button class="btn" data-act="squad-all" data-team="${t.id}">Zaznacz wszystkich</button>
@@ -457,9 +500,11 @@
       t.onCourt = t.onCourt.filter((id) => t.squad.includes(id));
       const need = Math.min(5, sq.length);
       if (sq.length <= 5 && t.onCourt.length !== sq.length) { t.onCourt = sq.map((p) => p.id); save(); }
+      const lastFive = lastFiveFor(t);
       return `
         <section class="card lineup" style="${teamVars(t)}">
           <div class="list-head"><span><span class="dot"></span>${esc(teamName(t))}</span><span class="count ${t.onCourt.length === need ? 'ok' : ''}">${t.onCourt.length}/${need}</span></div>
+          ${lastFive && !sameSet(lastFive, t.onCourt) ? `<button class="btn block last-btn" data-act="five-last" data-team="${t.id}">↺ Piątka z ostatniego meczu</button>` : ''}
           <div class="chip-grid">
             ${sortPlayers(sq).map((p) => `
               <button class="pchip ${t.onCourt.includes(p.id) ? 'on' : ''}" data-act="lineup-toggle" data-team="${t.id}" data-pid="${p.id}">
@@ -480,7 +525,8 @@
     const [ta, tb] = state.teams;
     const scoreSide = (t, right) => {
       const fouls = S.qFouls[t.id][Math.min(state.quarter, 4)] || 0;
-      const sub = `<div class="sc-sub ${fouls >= 5 ? 'bad' : fouls >= 4 ? 'warn' : ''}">Faule zesp.: ${fouls}</div>`;
+      // od 4 fauli drużyny w kwarcie (FIBA) każdy kolejny faul = rzuty wolne dla przeciwnika
+      const sub = `<div class="sc-sub ${fouls >= 5 ? 'bad' : fouls >= 4 ? 'warn' : ''}">Faule zesp.: ${fouls}${fouls >= 4 ? ' <b class="lim">LIMIT</b>' : ''}</div>`;
       return `
         <div class="sc-team ${right ? 'right' : ''}" style="${teamVars(t)}">
           <div class="sc-name"><span class="dot"></span><span class="nm">${esc(teamName(t))}</span></div>
@@ -506,7 +552,7 @@
         const key = t.id + ':' + p.id;
         const sel = ui.selP && ui.selP.team === t.id && ui.selP.pid === p.id;
         const elig = f && f.elig.has(key);
-        const fcls = st.pf >= 5 ? 'f5' : st.pf >= 4 ? 'f4' : '';
+        const fcls = st.pf >= 5 ? 'f5' : foulTrouble(st.pf) ? 'f4' : '';
         return `
           <button class="tile ${sel ? 'sel' : ''} ${elig ? 'elig' : ''} ${fcls}" data-act="player" data-team="${t.id}" data-pid="${p.id}">
             <span class="t-num">${esc(p.num)}</span>
@@ -539,7 +585,7 @@
         <div class="sc-mid"><button class="sc-q" data-act="qsheet">${qLabel(state.quarter)} <span class="caret">▾</span></button></div>
         ${scoreSide(tb, true)}
       </header>
-      <div class="teams-area">${teamBlocks}</div>
+      <div class="teams-area">${teamBlocks}${renderRecent()}</div>
       ${renderCtx()}
       <div class="pad">
         <div class="shots">${shotCol(1)}${shotCol(2)}${shotCol(3)}</div>
@@ -554,6 +600,21 @@
         <button data-act="go" data-to="box"><span>▦</span>Tabela</button>
         <button data-act="menu"><span>⋯</span>Menu</button>
       </nav>`;
+  }
+
+  // Kłopoty z faulami: 2 faule w 1. kwarcie, 3 do przerwy, 4 w drugiej połowie
+  const foulLimitFor = (q) => Math.min(q, 3) + 1;
+  const foulTrouble = (pf) => pf >= 4 || pf >= foulLimitFor(state.quarter);
+
+  // Pasek „ostatnie akcje” — najnowsza po lewej; dotknięcie otwiera pełną listę
+  const RECENT_SHORT = { oppf: 'faul', oppreb: 'ZB atak', opptov: 'strata', oppmiss: 'pudło', l1v1: 'przegr. 1×1', gdef: 'dobra obrona', ghelp: 'dobra pomoc', brot: 'zła rotacja', p1x: 'pudło 1', p2x: 'pudło 2', p3x: 'pudło 3' };
+  function renderRecent() {
+    const items = state.events.slice(-4).reverse().map((e) => {
+      const t = teamById(e.t), p = e.p && playerById(t, e.p);
+      const who = p ? p.last : 'Rywal';
+      return `<span class="rc-i" style="${teamVars(t)}"><span class="dot"></span>${esc(who)} <b>${esc(RECENT_SHORT[e.a] || A[e.a].short)}</b></span>`;
+    }).join('');
+    return `<button class="recent" data-act="go" data-to="log" aria-label="Ostatnie akcje — pokaż wszystkie">${items || '<span class="rc-empty">Tu zobaczysz ostatnie zapisane akcje</span>'}</button>`;
   }
 
   function evDesc(e) {
@@ -624,12 +685,33 @@
     if (!opts.chained && !fouledOut) setFollow(ev, opts);
     render();
     flash(ev);
+    if (!fouledOut) { const w = foulWarning(ev); if (w) toast(w, 'bad'); }
     if (fouledOut) {
       const t = teamById(team), p = playerById(t, pid);
       const bench = squadOf(t).filter((x) => !t.onCourt.includes(x.id));
       if (bench.length) openQuickSub(team, pid, 'fouls');
       else toast(`#${p.num} ${p.last}: 5 fauli — brak zawodników na ławce`, 'bad');
     }
+  }
+
+  // Ostrzeżenie po faulu: limit fauli drużyny (4 w kwarcie) albo zawodnik w kłopotach z faulami
+  function foulWarning(ev) {
+    const fq = Math.min(ev.q, 4);
+    let ft = null;
+    if (ev.a === 'pf' || ev.a === 'oppf') ft = ev.t;
+    else if (ev.a === 'fd' && !ev.nd && !otherTeam(ev.t).tracked) ft = otherTeam(ev.t).id;
+    if (!ft) return null;
+    const S = computeAll();
+    if ((S.qFouls[ft][fq] || 0) === 4) {
+      return `${teamName(teamById(ft))}: LIMIT fauli (4) — każdy kolejny faul to rzuty wolne`;
+    }
+    if (ev.a === 'pf' && ev.p) {
+      const t = teamById(ev.t), p = playerById(t, ev.p);
+      const n = S.player(ev.t, ev.p).pf;
+      if (n === 4) return `#${p.num} ${p.last}: 4 faule — piąty oznacza zejście`;
+      if (n >= foulLimitFor(ev.q) && n < 5) return `#${p.num} ${p.last}: ${n} faule ${ev.q === 1 ? 'w 1. kwarcie' : 'w 1. połowie'}`;
+    }
+    return null;
   }
 
   // Kto był na boisku w chwili akcji (potrzebne do +/−)
@@ -762,31 +844,68 @@
   }
 
   // ---------- tabela ----------
-  const COLS = [
-    ['pts', 'PKT'], ['s1', '1 PKT'], ['s2', '2 PKT'], ['s3', '3 PKT'], ['oreb', 'ZA'], ['dreb', 'ZO'], ['reb', 'ZB'],
-    ['ast', 'AS'], ['stl', 'PRZ'], ['tov', 'STR'], ['blk', 'BL'], ['pf', 'FP'], ['fd', 'FW'], ['pm', '+/−'], ['eval', 'EVAL'],
-    ['l1v1', 'P1×1'], ['gdef', 'DO'], ['ghelp', 'DP'], ['brot', 'ZR'], ['evalf', 'EVAL K'],
+  // Kolumny tabeli w grupach (nagłówek grupy nad skrótami)
+  const COL_GROUPS = [
+    ['', [['pts', 'PKT']]],
+    ['RZUTY', [['s1', '1 PKT'], ['s2', '2 PKT'], ['s3', '3 PKT'], ['sfg', 'Z GRY']]],
+    ['ZBIÓRKI', [['oreb', 'ZA'], ['dreb', 'ZO'], ['reb', 'ZB']]],
+    ['GRA', [['ast', 'AS'], ['stl', 'PRZ'], ['tov', 'STR'], ['blk', 'BL'], ['pf', 'FP'], ['fd', 'FW'], ['pm', '+/−']]],
+    ['', [['eval', 'EVAL']]],
+    ['OCENA OBRONY', [['l1v1', 'P1×1'], ['gdef', 'DO'], ['ghelp', 'DP'], ['brot', 'ZR']]],
+    ['', [['evalf', 'EVAL K']]],
   ];
+  const COLS = COL_GROUPS.flatMap(([, cols]) => cols);
+  const GROUP_START = new Set(COL_GROUPS.map(([, cols]) => cols[0][0]));
+  // „Najlepszy w meczu” — wyróżnienie w kolumnach, w których więcej = lepiej
+  const BEST_KEYS = ['pts', 'sfg', 'oreb', 'dreb', 'reb', 'ast', 'stl', 'blk', 'fd', 'pm', 'eval', 'gdef', 'ghelp', 'evalf'];
+  const bestVal = (s, k) => (k === 'sfg' ? s.fgm : s[k]);
+  function bestOf(list) {
+    const best = {};
+    for (const k of BEST_KEYS) {
+      const m = Math.max(...list.map((s) => bestVal(s, k)));
+      if (m > 0) best[k] = m;
+    }
+    return (s, k) => best[k] !== undefined && bestVal(s, k) === best[k];
+  }
   const fmtPm = (v) => (v === null || v === undefined ? '' : v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
   // rzuty: celne/wykonane i skuteczność w nawiasie, np. 8/10 (80%); bez rzutów samo 0/0
   const shot = (m, a) => (a ? `${m}/${a} (${Math.round((100 * m) / a)}%)` : `${m}/${a}`);
   const num = (v) => (typeof v === 'number' && v < 0 ? '−' + Math.abs(v) : v); // ujemne z typograficznym minusem
-  const cell = (s, k) => (k === 's1' ? shot(s.p1m, s.p1a) : k === 's2' ? shot(s.p2m, s.p2a) : k === 's3' ? shot(s.p3m, s.p3a) : k === 'pm' ? fmtPm(s.pm) : num(s[k]));
+  const cell = (s, k) => (k === 's1' ? shot(s.p1m, s.p1a) : k === 's2' ? shot(s.p2m, s.p2a) : k === 's3' ? shot(s.p3m, s.p3a) : k === 'sfg' ? shot(s.fgm, s.fga) : k === 'pm' ? fmtPm(s.pm) : num(s[k]));
   const pct = (m, a) => (a ? Math.round((100 * m) / a) + '%' : '–');
-  const LEGEND = 'c/w (%) – celne/wykonane i skuteczność · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty · P1×1 – przegrane pojedynki 1×1 · DO – dobra obrona · DP – dobra pomoc · ZR – zła rotacja · EVAL K (końcowy) = EVAL − P1×1 + DO + DP − ZR';
+  const LEGEND = 'c/w (%) – celne/wykonane i skuteczność · Z GRY – rzuty za 2 i 3 pkt razem · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty · P1×1 – przegrane pojedynki 1×1 · DO – dobra obrona · DP – dobra pomoc · ZR – zła rotacja · EVAL K (końcowy) = EVAL − P1×1 + DO + DP − ZR';
 
   // Drużyna bez statystyk zawodników: zbiórki w ataku i faule (porównanie ze zbiórkami w obronie ŁKS)
   function oppSummaries(S) {
     return state.teams.filter((t) => !t.tracked).map((t) => {
       const o = otherTeam(t.id);
-      return { t, pts: S.score[t.id], oreb: S.oppReb[t.id], fouls: S.oppFouls[t.id], tov: S.oppTov[t.id], miss: S.oppMiss[t.id], ourDreb: o.tracked ? S.team(o.id).dreb : null, ourName: teamName(o) };
+      return { t, pts: S.score[t.id], made: S.oppMade[t.id], oreb: S.oppReb[t.id], fouls: S.oppFouls[t.id], tov: S.oppTov[t.id], miss: S.oppMiss[t.id], ourDreb: o.tracked ? S.team(o.id).dreb : null, ourName: teamName(o) };
     });
   }
 
   // Raport: najpierw ŁKS, wszystko o rywalu na końcu
   const reportTeams = () => tracked().slice().sort((a, b) => (b.lks ? 1 : 0) - (a.lks ? 1 : 0));
-  const oppItems = (x) => [['Punkty', x.pts], ['Niecelne rzuty', x.miss], ['Zbiórki w ataku', x.oreb], ['Straty', x.tov], ['Faule', x.fouls]];
+  const oppItems = (x) => [['Punkty', x.pts], ['Trafione za 3 pkt', x.made[3]], ['Trafione za 2 pkt', x.made[2]], ['Trafione rzuty wolne (1 pkt)', x.made[1]],
+    ['Niecelne rzuty', x.miss], ['Zbiórki w ataku', x.oreb], ['Straty', x.tov], ['Faule', x.fouls]];
   const OPP_NOTE = 'Statystyki rywala bez statystyk zawodników: straty obejmują też przechwyty naszych zawodników, niecelne rzuty — ich bloki, a faule — faule przez nich wymuszone.';
+
+  // Drużyna w kolejnych kwartach: punkty zdobyte/stracone, rzuty, zbiórki, asysty, straty, faule
+  const QCOLS = [['pf_', 'Zdobyte'], ['pa_', 'Stracone'], ['sfg', 'Z gry'], ['s3', 'Za 3'], ['s1', 'Wolne'], ['reb', 'ZB'], ['ast', 'AS'], ['tov', 'STR'], ['pf', 'FP']];
+  function teamQuarterRows(S, t) {
+    const qs = Array.from({ length: S.maxQ }, (_, i) => i + 1).filter((q) => q <= 4 || state.events.some((e) => e.q === q));
+    const o = otherTeam(t.id);
+    const val = (st, k, q) => (k === 'pf_' ? (q ? S.qPts[t.id][q] || 0 : S.score[t.id]) : k === 'pa_' ? (q ? S.qPts[o.id][q] || 0 : S.score[o.id]) : String(cell(st, k)));
+    const rows = qs.map((q) => ({ label: qLabel(q), vals: QCOLS.map(([k]) => val(S.teamQ(t.id, q), k, q)) }));
+    rows.push({ label: 'Razem', total: true, vals: QCOLS.map(([k]) => val(S.team(t.id), k, 0)) });
+    return rows;
+  }
+  // Piątki: bilans punktów, gdy grały razem (najlepsze na górze)
+  function unitRows(S, t) {
+    return S.units(t.id).filter((u) => u.ids.length >= Math.min(5, t.squad.length))
+      .sort((a, b) => b.pm - a.pm || b.pf - a.pf || a.pa - b.pa)
+      .slice(0, 8)
+      .map((u) => ({ ...u, names: sortPlayers(u.ids.map((id) => playerById(t, id)).filter(Boolean)).map((p) => `${p.num} ${p.last}`) }));
+  }
 
   function quarterRows(S) {
     const qs = Array.from({ length: S.maxQ }, (_, i) => i + 1);
@@ -801,20 +920,42 @@
       <table class="qtable"><thead><tr><th></th>${QR.qs.map((q) => `<th>${qShort(q)}</th>`).join('')}<th>Σ</th></tr></thead>
       <tbody>${QR.rows.map((r) => `<tr><td><span class="dot" style="${teamVars(r.t)}"></span>${esc(teamName(r.t))}</td>${r.vals.map((v) => `<td>${v}</td>`).join('')}<td><b>${r.total}</b></td></tr>`).join('')}</tbody></table>`;
     const tables = reportTeams().map((t) => {
-      const rows = sortPlayers(squadOf(t)).map((p) => {
-        const s = S.player(t.id, p.id);
-        return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' || k === 'evalf' ? 'em' : ''}${k === 'evalf' ? ' evalf' : ''}${k === 'pm' ? (s.pm > 0 ? ' pm-plus' : s.pm < 0 ? ' pm-minus' : '') : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
-      }).join('');
+      const plist = sortPlayers(squadOf(t)).map((p) => ({ p, s: S.player(t.id, p.id) }));
+      const isBest = bestOf(plist.map((x) => x.s));
+      const cls = (s, k) => [
+        k === 'pts' || k === 'eval' || k === 'evalf' ? 'em' : '',
+        k === 'evalf' ? 'evalf' : '',
+        GROUP_START.has(k) ? 'gs' : '',
+        k === 'pm' ? (s.pm > 0 ? 'pm-plus' : s.pm < 0 ? 'pm-minus' : '') : '',
+        isBest(s, k) ? 'best' : '',
+      ].filter(Boolean).join(' ');
+      const rows = plist.map(({ p, s }) => `<tr><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${cls(s, k)}">${cell(s, k)}</td>`).join('')}</tr>`).join('');
       const T = S.team(t.id);
+      const groupRow = `<tr class="grp"><th class="stk nr"></th><th class="stk nm"></th>${COL_GROUPS.map(([g, cols]) => `<th colspan="${cols.length}" class="gs ${g ? '' : 'nog'}">${g}</th>`).join('')}</tr>`;
+      const QT = teamQuarterRows(S, t);
+      const qtab = `
+          <h3 class="box-sub">${esc(teamName(t))} w kwartach</h3>
+          <div class="tscroll"><table class="stats qstats">
+            <thead><tr><th class="stk q">Kwarta</th>${QCOLS.map(([, h]) => `<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>${QT.filter((r) => !r.total).map((r) => `<tr><td class="stk q">${r.label}</td>${r.vals.map((v, i) => `<td class="${i < 2 ? 'em' : ''}">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+            <tfoot>${QT.filter((r) => r.total).map((r) => `<tr><td class="stk q">${r.label}</td>${r.vals.map((v) => `<td>${v}</td>`).join('')}</tr>`).join('')}</tfoot>
+          </table></div>`;
+      const U = unitRows(S, t);
+      const utab = U.length ? `
+          <h3 class="box-sub">Najskuteczniejsze piątki ${esc(teamName(t))} — bilans +/−</h3>
+          <ol class="units">${U.map((u, i) => `<li><span class="u-rk">${i + 1}.</span><span class="u-pm ${u.pm > 0 ? 'plus' : u.pm < 0 ? 'minus' : ''}">${fmtPm(u.pm)}</span><span class="u-sc">${u.pf}:${u.pa}</span><span class="u-nm">${u.names.map(esc).join(', ')}</span></li>`).join('')}</ol>
+          <p class="muted small">Kombinacje pięciu zawodników, które były razem na parkiecie, od najlepszego bilansu. Liczby: punkty zdobyte : stracone, gdy dokładnie ta piątka grała razem.</p>` : '';
       return `
         <section class="box-team" style="${teamVars(t)}">
           <h2><span class="dot"></span>${esc(teamName(t))}</h2>
           <div class="tscroll"><table class="stats">
-            <thead><tr><th class="stk nr">Nr</th><th class="stk nm">Zawodnik</th>${COLS.map(([, h]) => `<th>${h}</th>`).join('')}</tr></thead>
+            <thead>${groupRow}<tr><th class="stk nr">Nr</th><th class="stk nm">Zawodnik</th>${COLS.map(([k, h]) => `<th class="${GROUP_START.has(k) ? 'gs' : ''}${k === 'evalf' ? ' evalf' : ''}">${h}</th>`).join('')}</tr></thead>
             <tbody>${rows}</tbody>
-            <tfoot><tr><td class="stk nr"></td><td class="stk nm">Razem</td>${COLS.map(([k]) => `<td>${cell(T, k)}</td>`).join('')}</tr></tfoot>
+            <tfoot><tr><td class="stk nr"></td><td class="stk nm">Razem</td>${COLS.map(([k]) => `<td class="${GROUP_START.has(k) ? 'gs' : ''}${k === 'evalf' ? ' evalf' : ''}">${cell(T, k)}</td>`).join('')}</tr></tfoot>
           </table></div>
-          <p class="muted small">Skuteczność: 1 pkt ${pct(T.p1m, T.p1a)} · 2 pkt ${pct(T.p2m, T.p2a)} · 3 pkt ${pct(T.p3m, T.p3a)}</p>
+          <p class="muted small">Skuteczność: z gry ${pct(T.fgm, T.fga)} · 1 pkt ${pct(T.p1m, T.p1a)} · 2 pkt ${pct(T.p2m, T.p2a)} · 3 pkt ${pct(T.p3m, T.p3a)} · <span class="best-key">wyróżnione</span> = najlepszy wynik w meczu</p>
+          ${qtab}
+          ${utab}
         </section>`;
     }).join('');
     const canShare = !!(navigator.canShare && window.File);
@@ -1010,19 +1151,32 @@
         margin: [0, 0, 0, 14],
       },
     ];
+    const BEST_FILL = '#d6f2df', EVALK_FILL = '#fff1c7';
     for (const t of reportTeams()) {
       const T = S.team(t.id);
-      const head = [{ text: 'Nr', style: 'th' }, { text: 'Zawodnik', style: 'th' }, ...COLS.map(([, h]) => ({ text: h, style: 'th', alignment: 'center' }))];
-      const body = [head];
-      for (const p of sortPlayers(squadOf(t))) {
-        const s = S.player(t.id, p.id);
+      const plist = sortPlayers(squadOf(t)).map((p) => ({ p, s: S.player(t.id, p.id) }));
+      const isBest = bestOf(plist.map((x) => x.s));
+      const groupRow = [{ text: '', style: 'th' }, { text: '', style: 'th' }];
+      for (const [g, cols] of COL_GROUPS) {
+        groupRow.push({ text: g, style: 'thg', colSpan: cols.length, alignment: 'center' });
+        for (let i = 1; i < cols.length; i++) groupRow.push({});
+      }
+      const head = [{ text: 'Nr', style: 'th' }, { text: 'Zawodnik', style: 'th' }, ...COLS.map(([k, h]) => ({ text: h, style: 'th', alignment: 'center', fillColor: k === 'evalf' ? EVALK_FILL : undefined }))];
+      const body = [groupRow, head];
+      for (const { p, s } of plist) {
         body.push([
           { text: p.num, alignment: 'center' },
           { text: [{ text: p.last, bold: true }, p.first ? ' ' + p.first.charAt(0) + '.' : ''], noWrap: true },
-          ...COLS.map(([k]) => ({ text: String(cell(s, k)), alignment: 'center', bold: k === 'pts' || k === 'eval' || k === 'evalf' })),
+          ...COLS.map(([k]) => {
+            const best = isBest(s, k);
+            return { text: String(cell(s, k)), alignment: 'center', bold: best || k === 'pts' || k === 'eval' || k === 'evalf', fillColor: best ? BEST_FILL : k === 'evalf' ? EVALK_FILL : undefined, fontSize: k === 'evalf' ? 9 : undefined };
+          }),
         ]);
       }
-      body.push([{ text: '' }, { text: 'Razem', bold: true }, ...COLS.map(([k]) => ({ text: String(cell(T, k)), alignment: 'center', bold: true }))]);
+      body.push([{ text: '' }, { text: 'Razem', bold: true }, ...COLS.map(([k]) => ({ text: String(cell(T, k)), alignment: 'center', bold: true, fillColor: k === 'evalf' ? EVALK_FILL : undefined }))]);
+      // pionowe linie oddzielające grupy kolumn
+      const sepAt = new Set([2]);
+      { let i = 2; for (const [, cols] of COL_GROUPS) { sepAt.add(i); i += cols.length; } }
       content.push(
         {
           columns: [
@@ -1031,32 +1185,68 @@
           ], columnGap: 6, margin: [0, 6, 0, 4],
         },
         {
-          table: { headerRows: 1, widths: [16, '*', ...COLS.map(([k]) => (/^s\d$/.test(k) ? 50 : k === 'eval' || k === 'evalf' ? 28 : 21))], body },
+          table: { headerRows: 2, widths: [16, '*', ...COLS.map(([k]) => (/^s(\d|fg)$/.test(k) ? 47 : k === 'eval' || k === 'evalf' ? 28 : 20))], body },
           fontSize: 8,
           layout: {
             ...thin,
-            paddingLeft: () => 2, paddingRight: () => 2,
-            fillColor: (row) => (row === 0 ? '#eef1f4' : row === body.length - 1 ? '#f6f7f9' : null),
+            vLineWidth: (i) => (sepAt.has(i) ? 0.5 : 0),
+            vLineColor: () => '#c9ced6',
+            paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 2.2, paddingBottom: () => 2.2,
+            fillColor: (row) => (row <= 1 ? '#eef1f4' : row === body.length - 1 ? '#f6f7f9' : null),
           },
         },
-        { text: `Skuteczność: 1 pkt ${pct(T.p1m, T.p1a)}  ·  2 pkt ${pct(T.p2m, T.p2a)}  ·  3 pkt ${pct(T.p3m, T.p3a)}`, style: 'meta', margin: [0, 4, 0, 12] },
+        { text: [`Skuteczność: z gry ${pct(T.fgm, T.fga)}  ·  1 pkt ${pct(T.p1m, T.p1a)}  ·  2 pkt ${pct(T.p2m, T.p2a)}  ·  3 pkt ${pct(T.p3m, T.p3a)}  ·  `, { text: ' zielone tło ', background: BEST_FILL, color: '#1d232b' }, ' = najlepszy wynik w meczu'], style: 'meta', margin: [0, 4, 0, 10] },
       );
+      // drużyna w kwartach + piątki — obok siebie
+      const QT = teamQuarterRows(S, t);
+      const qBody = [
+        [{ text: 'Kwarta', style: 'th' }, ...QCOLS.map(([, h]) => ({ text: h, style: 'th', alignment: 'center' }))],
+        ...QT.map((r) => [{ text: r.label, bold: !!r.total }, ...r.vals.map((v, i) => ({ text: String(v), alignment: 'center', noWrap: true, bold: !!r.total || i < 2 }))]),
+      ];
+      const U = unitRows(S, t);
+      const uBody = [
+        [{ text: '', style: 'th' }, { text: '+/−', style: 'th', alignment: 'center' }, { text: 'Pkt', style: 'th', alignment: 'center' }, { text: 'Piątka', style: 'th' }],
+        ...U.map((u, i) => [
+          { text: `${i + 1}.`, alignment: 'right', color: '#5b6573' },
+          { text: fmtPm(u.pm), alignment: 'center', bold: true, color: u.pm > 0 ? '#0b7a3b' : u.pm < 0 ? '#b42318' : '#1d232b' },
+          { text: `${u.pf}:${u.pa}`, alignment: 'center' },
+          { text: u.names.join(', ') },
+        ]),
+      ];
+      content.push({
+        columns: [
+          { width: 'auto', stack: [
+            { text: `${teamName(t)} w kwartach`, style: 'h3' },
+            { table: { headerRows: 1, body: qBody }, fontSize: 8, layout: { ...thin, paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 2, paddingBottom: () => 2, fillColor: (row) => (row === 0 ? '#eef1f4' : row === qBody.length - 1 ? '#f6f7f9' : null) } },
+          ] },
+          U.length ? { width: '*', stack: [
+            { text: `Najskuteczniejsze piątki ${teamName(t)} — bilans +/−`, style: 'h3' },
+            { table: { headerRows: 1, widths: [12, 24, 30, '*'], body: uBody }, fontSize: 8, layout: { ...thin, paddingTop: () => 2, paddingBottom: () => 2, fillColor: (row) => (row === 0 ? '#eef1f4' : null) } },
+            { text: 'Kombinacje pięciu zawodników, które były razem na parkiecie, od najlepszego bilansu. Pkt = zdobyte : stracone, gdy dokładnie ta piątka grała razem.', style: 'meta', fontSize: 7.5, margin: [0, 3, 0, 0] },
+          ] } : { width: '*', text: '' },
+        ],
+        columnGap: 18, margin: [0, 0, 0, 8],
+      });
     }
     for (const x of oppSummaries(S)) {
-      content.push(
+      content.push({ unbreakable: true, stack: [
         {
           columns: [
             { width: 10, canvas: [{ type: 'rect', x: 0, y: 2, w: 10, h: 10, color: x.t.color, lineColor: '#888888', lineWidth: 0.5 }] },
             { text: [teamName(x.t), { text: '  — rywal', bold: false, color: '#5b6573', fontSize: 10 }], style: 'h2' },
           ], columnGap: 6, margin: [0, 6, 0, 4],
         },
-        { ul: oppItems(x).map(([l, v]) => ({ text: [l + ': ', { text: String(v), bold: true }] })), fontSize: 10, margin: [4, 0, 0, 12] },
-      );
+        (() => {
+          const li = oppItems(x).map(([l, v]) => ({ text: [l + ': ', { text: String(v), bold: true }] }));
+          const half = Math.ceil(li.length / 2);
+          return { columns: [{ width: 'auto', ul: li.slice(0, half) }, { width: 'auto', ul: li.slice(half) }], columnGap: 40, fontSize: 10, margin: [4, 0, 0, 12] };
+        })(),
+      ] });
     }
     content.push({ text: LEGEND + (oppSummaries(S).length ? '  ·  ' + OPP_NOTE : ''), style: 'legend' });
 
     return {
-      pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 28, 28, 28],
+      pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [26, 22, 26, 22],
       info: { title: `${teamName(ta)} – ${teamName(tb)}` },
       content,
       defaultStyle: { font: 'Roboto', fontSize: 9, color: '#1d232b' },
@@ -1066,6 +1256,8 @@
         meta: { fontSize: 9, color: '#5b6573' },
         h2: { fontSize: 12, bold: true },
         th: { bold: true, fontSize: 7.5, color: '#3a4350' },
+        thg: { bold: true, fontSize: 6.5, color: '#6b7480', characterSpacing: 0.6 },
+        h3: { fontSize: 9.5, bold: true, margin: [0, 0, 0, 3] },
         legend: { fontSize: 7.5, color: '#6b7480' },
       },
     };
@@ -1201,6 +1393,7 @@
         <div class="menu-list">
           <button class="menu-item" data-act="finish">🏁 Zakończ mecz i pokaż tabelę</button>
           <button class="menu-item" data-act="toggle-hints">💡 Podpowiedzi asyst i zbiórek: <b>${state.hints ? 'wł.' : 'wył.'}</b></button>
+          <button class="menu-item" data-act="toggle-vibe">📳 Wibracja po zapisaniu akcji: <b>${vibeOn() ? 'wł.' : 'wył.'}</b></button>
           <button class="menu-item" data-act="toggle-theme">${theme === 'light' ? '🌙 Motyw: <b>jasny</b> — przełącz na ciemny' : '☀️ Motyw: <b>ciemny</b> — przełącz na jasny'}</button>
           <button class="menu-item" data-act="cloud-settings">☁️ Arkusz Google: <b>${cloudReady() ? 'połączony' : 'skonfiguruj'}</b></button>
           <button class="menu-item" data-act="same-rosters">🔁 Nowy mecz — te same drużyny i składy</button>
@@ -1246,6 +1439,16 @@
         else t.squad.push(d.pid);
         vibrate(8); save(); render(); break;
       }
+      case 'squad-last': {
+        const t = teamById(d.team), ids = lastSquadFor(t);
+        if (ids) { t.squad = ids.slice(); t.onCourt = t.onCourt.filter((id) => ids.includes(id)); vibrate(8); save(); render(); }
+        break;
+      }
+      case 'five-last': {
+        const t = teamById(d.team), ids = lastFiveFor(t);
+        if (ids) { t.onCourt = ids.slice(); vibrate(8); save(); render(); }
+        break;
+      }
       case 'squad-all': { const t = teamById(d.team); t.squad = t.players.map((p) => p.id); save(); render(); break; }
       case 'squad-none': { const t = teamById(d.team); t.squad = []; t.onCourt = []; save(); render(); break; }
       case 'extra-toggle': ui.extraOpen = !ui.extraOpen; ui.focusNum = ui.extraOpen; render(); break;
@@ -1289,6 +1492,8 @@
       case 'start': {
         const bad = tracked().find((t) => t.onCourt.length !== Math.min(5, t.squad.length));
         if (bad) { toast(`Wybierz pierwszą piątkę: ${teamName(bad)}.`, 'bad'); return; }
+        const lk = lksTeam();
+        if (lk && lk.tracked && lk.squad.length) { try { localStorage.setItem(LAST_KEY, JSON.stringify({ squad: lk.squad.slice(), five: lk.onCourt.slice(), ts: Date.now() })); } catch (e) { /* brak */ } }
         go('live'); break;
       }
       case 'player': tapPlayer(d.team, d.pid); break;
@@ -1409,6 +1614,10 @@
         closeSheet(); toast('Odłączono');
         if (app.className === 'scr-home') showHome(); else render();
         return;
+      }
+      case 'toggle-vibe': {
+        try { localStorage.setItem(VIBE_KEY, vibeOn() ? 'off' : 'on'); } catch (e) { /* brak */ }
+        vibrate(20); renderSheet(); break;
       }
       case 'toggle-hints': state.hints = !state.hints; clearFollow(); save(); renderSheet(); break;
       case 'same-rosters': {
