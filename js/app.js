@@ -5,7 +5,7 @@
  */
 'use strict';
 (() => {
-  const APP_VERSION = '11'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
+  const APP_VERSION = '13'; // pokazywana na ekranie startowym; podbijaj razem z VERSION w sw.js
   const STORE_KEY = 'statystyki:v1';
   const HINT_MS = 5000; // jak długo czeka podpowiedź asysty/zbiórki
   const FT_MS = 10000;  // podpowiedź kolejnego rzutu wolnego czeka dłużej (sędzia podaje piłkę)
@@ -768,9 +768,11 @@
     ['l1v1', 'P1×1'], ['gdef', 'DO'], ['ghelp', 'DP'], ['brot', 'ZR'], ['evalf', 'EVAL K'],
   ];
   const fmtPm = (v) => (v === null || v === undefined ? '' : v > 0 ? '+' + v : v < 0 ? '−' + Math.abs(v) : '0');
-  const cell = (s, k) => (k === 's1' ? `${s.p1m}/${s.p1a}` : k === 's2' ? `${s.p2m}/${s.p2a}` : k === 's3' ? `${s.p3m}/${s.p3a}` : k === 'pm' ? fmtPm(s.pm) : s[k]);
+  // rzuty: celne/wykonane i skuteczność w nawiasie, np. 8/10 (80%); bez rzutów samo 0/0
+  const shot = (m, a) => (a ? `${m}/${a} (${Math.round((100 * m) / a)}%)` : `${m}/${a}`);
+  const cell = (s, k) => (k === 's1' ? shot(s.p1m, s.p1a) : k === 's2' ? shot(s.p2m, s.p2a) : k === 's3' ? shot(s.p3m, s.p3a) : k === 'pm' ? fmtPm(s.pm) : s[k]);
   const pct = (m, a) => (a ? Math.round((100 * m) / a) + '%' : '–');
-  const LEGEND = 'c/w – celne/wykonane · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty · P1×1 – przegrane pojedynki 1×1 · DO – dobra obrona · DP – dobra pomoc · ZR – zła rotacja · EVAL K (końcowy) = EVAL − P1×1 + DO + DP − ZR';
+  const LEGEND = 'c/w (%) – celne/wykonane i skuteczność · ZA – zbiórki w ataku · ZO – zbiórki w obronie · ZB – zbiórki razem · AS – asysty · PRZ – przechwyty · STR – straty · BL – bloki · FP – faule popełnione · FW – faule wymuszone · +/− – różnica punktów (zdobyte − stracone), gdy zawodnik był na boisku · EVAL = punkty − niecelne rzuty + asysty + przechwyty + zbiórki + bloki − straty · P1×1 – przegrane pojedynki 1×1 · DO – dobra obrona · DP – dobra pomoc · ZR – zła rotacja · EVAL K (końcowy) = EVAL − P1×1 + DO + DP − ZR';
 
   // Drużyna bez statystyk zawodników: zbiórki w ataku i faule (porównanie ze zbiórkami w obronie ŁKS)
   function oppSummaries(S) {
@@ -779,6 +781,11 @@
       return { t, pts: S.score[t.id], oreb: S.oppReb[t.id], fouls: S.oppFouls[t.id], tov: S.oppTov[t.id], miss: S.oppMiss[t.id], ourDreb: o.tracked ? S.team(o.id).dreb : null, ourName: teamName(o) };
     });
   }
+
+  // Raport: najpierw ŁKS, wszystko o rywalu na końcu
+  const reportTeams = () => tracked().slice().sort((a, b) => (b.lks ? 1 : 0) - (a.lks ? 1 : 0));
+  const oppItems = (x) => [['Punkty', x.pts], ['Niecelne rzuty', x.miss], ['Zbiórki w ataku', x.oreb], ['Straty', x.tov], ['Faule', x.fouls]];
+  const OPP_NOTE = 'Statystyki rywala bez statystyk zawodników: straty obejmują też przechwyty naszych zawodników, niecelne rzuty — ich bloki, a faule — faule przez nich wymuszone.';
 
   function quarterRows(S) {
     const qs = Array.from({ length: S.maxQ }, (_, i) => i + 1);
@@ -792,7 +799,7 @@
     const qTable = `
       <table class="qtable"><thead><tr><th></th>${QR.qs.map((q) => `<th>${qShort(q)}</th>`).join('')}<th>Σ</th></tr></thead>
       <tbody>${QR.rows.map((r) => `<tr><td><span class="dot" style="${teamVars(r.t)}"></span>${esc(teamName(r.t))}</td>${r.vals.map((v) => `<td>${v}</td>`).join('')}<td><b>${r.total}</b></td></tr>`).join('')}</tbody></table>`;
-    const tables = tracked().map((t) => {
+    const tables = reportTeams().map((t) => {
       const rows = sortPlayers(squadOf(t)).map((p) => {
         const s = S.player(t.id, p.id);
         return `<tr class="${t.onCourt.includes(p.id) ? '' : ''}"><td class="stk nr">${esc(p.num)}</td><td class="stk nm">${esc(p.last)}${p.first ? ' ' + esc(p.first.charAt(0)) + '.' : ''}</td>${COLS.map(([k]) => `<td class="${k === 'pts' || k === 'eval' || k === 'evalf' ? 'em' : ''}${k === 'evalf' ? ' evalf' : ''}${k === 'pm' ? (s.pm > 0 ? ' pm-plus' : s.pm < 0 ? ' pm-minus' : '') : ''}">${cell(s, k)}</td>`).join('')}</tr>`;
@@ -822,20 +829,13 @@
           <div style="${teamVars(tb)}">${esc(teamName(tb))}<span class="dot"></span></div>
         </div>
         ${qTable}
-        ${oppSummaries(S).map((x) => `
-          <div class="opp-sum" style="${teamVars(x.t)}">
-            <div class="opp-sum-h"><span class="dot"></span>${esc(teamName(x.t))} <span class="muted small">· rywal bez statystyk zawodników</span></div>
-            <div class="opp-sum-row">
-              <div><b>${x.oreb}</b><span>zbiórki w ataku rywala</span></div>
-              ${x.ourDreb !== null ? `<div><b>${x.ourDreb}</b><span>zbiórki w obronie ${esc(x.ourName)}</span></div>` : ''}
-              <div><b>${x.tov}</b><span>straty rywala</span></div>
-              <div><b>${x.miss}</b><span>niecelne rzuty rywala</span></div>
-              <div><b>${x.fouls}</b><span>faule rywala</span></div>
-            </div>
-            <p class="muted small opp-note">Straty rywala obejmują przechwyty ${esc(x.ourName)}, niecelne rzuty — bloki ${esc(x.ourName)}, a faule — faule wymuszone przez ${esc(x.ourName)}.</p>
-          </div>`).join('')}
         ${tables}
-        <p class="legend muted small">${LEGEND}</p>
+        ${oppSummaries(S).map((x) => `
+          <section class="opp-final" style="${teamVars(x.t)}">
+            <h2><span class="dot"></span>${esc(teamName(x.t))} <span class="muted small">— rywal</span></h2>
+            <ul class="opp-list">${oppItems(x).map(([l, v]) => `<li>${l}: <b>${v}</b></li>`).join('')}</ul>
+          </section>`).join('')}
+        <p class="legend muted small">${LEGEND}${oppSummaries(S).length ? ' · ' + OPP_NOTE : ''}</p>
       </div>
       <div class="footbar box-foot">
         <button class="btn block cloud-btn" data-act="cloud-save">☁️ Zapisz w Arkuszu Google<small>${esc(cloudStatus())}</small></button>
@@ -1009,19 +1009,7 @@
         margin: [0, 0, 0, 14],
       },
     ];
-    for (const x of oppSummaries(S)) {
-      content.push({
-        text: [
-          { text: teamName(x.t) + ' (rywal, bez statystyk zawodników): ', bold: true },
-          `zbiórki w ataku: ${x.oreb}`,
-          x.ourDreb !== null ? `  ·  zbiórki w obronie ${x.ourName}: ${x.ourDreb}` : '',
-          `  ·  straty: ${x.tov}  ·  niecelne rzuty: ${x.miss}  ·  faule: ${x.fouls}`,
-        ],
-        style: 'meta', alignment: 'center', margin: [0, -6, 0, 12],
-      });
-    }
-
-    for (const t of tracked()) {
+    for (const t of reportTeams()) {
       const T = S.team(t.id);
       const head = [{ text: 'Nr', style: 'th' }, { text: 'Zawodnik', style: 'th' }, ...COLS.map(([, h]) => ({ text: h, style: 'th', alignment: 'center' }))];
       const body = [head];
@@ -1029,7 +1017,7 @@
         const s = S.player(t.id, p.id);
         body.push([
           { text: p.num, alignment: 'center' },
-          { text: [{ text: p.last, bold: true }, p.first ? ' ' + p.first : ''] },
+          { text: [{ text: p.last, bold: true }, p.first ? ' ' + p.first.charAt(0) + '.' : ''], noWrap: true },
           ...COLS.map(([k]) => ({ text: String(cell(s, k)), alignment: 'center', bold: k === 'pts' || k === 'eval' || k === 'evalf' })),
         ]);
       }
@@ -1042,16 +1030,29 @@
           ], columnGap: 6, margin: [0, 6, 0, 4],
         },
         {
-          table: { headerRows: 1, widths: [20, '*', ...COLS.map(([k]) => (/^s\d$/.test(k) ? 36 : k === 'eval' || k === 'evalf' ? 34 : 27))], body },
+          table: { headerRows: 1, widths: [16, '*', ...COLS.map(([k]) => (/^s\d$/.test(k) ? 50 : k === 'eval' || k === 'evalf' ? 28 : 21))], body },
+          fontSize: 8,
           layout: {
             ...thin,
+            paddingLeft: () => 2, paddingRight: () => 2,
             fillColor: (row) => (row === 0 ? '#eef1f4' : row === body.length - 1 ? '#f6f7f9' : null),
           },
         },
         { text: `Skuteczność: 1 pkt ${pct(T.p1m, T.p1a)}  ·  2 pkt ${pct(T.p2m, T.p2a)}  ·  3 pkt ${pct(T.p3m, T.p3a)}`, style: 'meta', margin: [0, 4, 0, 12] },
       );
     }
-    content.push({ text: LEGEND, style: 'legend' });
+    for (const x of oppSummaries(S)) {
+      content.push(
+        {
+          columns: [
+            { width: 10, canvas: [{ type: 'rect', x: 0, y: 2, w: 10, h: 10, color: x.t.color, lineColor: '#888888', lineWidth: 0.5 }] },
+            { text: [teamName(x.t), { text: '  — rywal', bold: false, color: '#5b6573', fontSize: 10 }], style: 'h2' },
+          ], columnGap: 6, margin: [0, 6, 0, 4],
+        },
+        { ul: oppItems(x).map(([l, v]) => ({ text: [l + ': ', { text: String(v), bold: true }] })), fontSize: 10, margin: [4, 0, 0, 12] },
+      );
+    }
+    content.push({ text: LEGEND + (oppSummaries(S).length ? '  ·  ' + OPP_NOTE : ''), style: 'legend' });
 
     return {
       pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [28, 28, 28, 28],
@@ -1063,7 +1064,7 @@
         score: { fontSize: 28, bold: true },
         meta: { fontSize: 9, color: '#5b6573' },
         h2: { fontSize: 12, bold: true },
-        th: { bold: true, fontSize: 8.5, color: '#3a4350' },
+        th: { bold: true, fontSize: 7.5, color: '#3a4350' },
         legend: { fontSize: 7.5, color: '#6b7480' },
       },
     };

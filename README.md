@@ -35,6 +35,7 @@ Działa w przeglądarce, da się ją zainstalować na ekranie głównym telefonu
    - Każda akcja daje krótki „błysk” na kafelku zawodnika — widać kątem oka, że się zapisała.
    - **Jasny motyw:** przełącznik w Menu i na ekranie startowym (zapamiętywany na tym urządzeniu) — przydatny w bardzo jasnej hali.
 5. **Tabela** — statystyki wszystkich zawodników, eksport do PDF i udostępnianie (np. WhatsApp, e-mail).
+   Raport: najpierw ŁKS (zawodnicy jako „Nazwisko I.”, rzuty jako celne/wykonane ze skutecznością, np. 8/10 (80%)), a na końcu osobno rywal — lista punktowana.
 
 ## EVAL końcowy (EVAL K)
 
